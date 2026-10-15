@@ -178,33 +178,33 @@
 
   <PropertyGroup>
     <!-- Режим A активен, если в lib\ есть хотя бы одна DLL -->
-    <HasLibMode Condition="Exists('$(LibRefPath)') And '$(HasLibMode)' == ''">true</HasLibMode>
+    <!-- Режим A активен только если в lib\ есть хотя бы одна реальная DLL
+         (папка может существовать с пустым .gitkeep — это НЕ режим A) -->
+    <HasLibMode Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll') Or Exists('$(LibRefPath)\BepInEx.dll') Or Exists('$(LibRefPath)\UnityEngine.dll')">true</HasLibMode>
   </PropertyGroup>
 
   <!--
     Проверка подлинности ключевых сборок в lib\.
-    Предыдущая версия проекта могла оставить в lib\ СИНТЕТИЧЕСКУЮ facade-сборку
-    UnityEngine.dll (создавалась целевым элементом GenerateUnityEngineFacade, когда
-    настоящего файла не было). Компилятор принимает её вместо настоящей сборки, и
-    тогда все типы цепочки наследования из Assembly-CSharp (BuffDef, HealthComponent,
-    CharacterBase...) становятся «не найдены в пространстве имён RoR2».
-    Признак подделки: файл меньше ~1 МБ (настоящий UnityEngine.dll — сотни КБ…МБ).
-    Если обнаружена facade-сборка — удаляем её и показываем ошибку с инструкцией.
+    Признак подделки/facade-заглушки: размер файла менее ~100 КБ.
+    Настоящие UnityEngine.dll / Assembly-CSharp.dll — сотни КБ…МБ.
+    Поддельные файлы удаляются автоматически, выводится ошибка с инструкцией.
+    Target вызывается только если в lib\ есть хотя бы одна реальная DLL
+    (HasLibMode == true); пустая папка lib\ (с .gitkeep) игнорируется.
   -->
-  <Target Name="ValidateLibReferences" BeforeTargets="ResolveAssemblyReferences">
+  <Target Name="ValidateLibReferences" BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(HasLibMode)' == 'true'">
     <PropertyGroup>
-      <!-- Порог в КБ: facade-заглушка предыдущей версии — единицы КБ; настоящие
-           UnityEngine.dll / Assembly-CSharp.dll — сотни КБ…МБ -->
+      <!-- Порог в КБ: заглушки — единицы КБ; настоящие DLL — сотни КБ…МБ -->
       <_FacadeSizeThresholdKb>100</_FacadeSizeThresholdKb>
     </PropertyGroup>
     <ItemGroup>
       <_LibCheck Include="Assembly-CSharp.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;BepInEx.dll">
-        <Full>$(LibRefPath)\%(Identity)</Full>
+        <Full>$([System.IO.Path]::Combine('$(LibRefPath)', '%(Identity)'))</Full>
       </_LibCheck>
       <_LibCheck Update="@(_LibCheck)"
                  Size="$([System.IO.File]::ReadAllBytes('%(Full)').Length)"
                  Condition="Exists('%(Full)')" />
-      <!-- Размер в КБ (деление даёт целочисленное значение; facade-заглушка ~несколько КБ) -->
+      <!-- Размер в КБ (деление даёт целочисленное значение; заглушка ~несколько КБ) -->
       <_LibCheck Update="@(_LibCheck)"
                  SizeKb="$([MSBuild]::Divide('%(_LibCheck.Size)', 1024).ToString('0'))"
                  Condition="'%(_LibCheck.Size)' != ''" />
@@ -216,31 +216,9 @@
            Text="[RoR2FirstPersonBrawler] В lib\ обнаружены НЕ НАСТОЯЩИЕ (синтетические facade-) сборки: @(_FakeLibRefs->'%(Identity)', ', '). Они были сгенерированы предыдущей версией проекта и удалены при сборке. Ошибки вида «тип BuffDef/HealthComponent не найден в RoR2» вызваны именно ими. Скопируйте настоящие DLL из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ и &lt;игра&gt;\BepInEx\core\ в lib\ и пересоберите решение." />
   </Target>
 
-  <!-- Fallback: если UnityEngine.dll отсутствует и в lib\, и в папке игры
-       (например, зависимости скопированы выборочно), генерируем минимальную
-       facade-сборку UnityEngine, Version=0.0.0.0 с типом MonoBehaviour.
-       Этого достаточно, чтобы компилятор разрешил цепочку наследования из
-       Assembly-CSharp; в рантайме BepInEx/Mono подставит настоящую сборку. -->
-  <Target Name="GenerateUnityEngineFacade" BeforeTargets="ResolveAssemblyReferences"
-          Condition="!Exists('$(LibRefPath)\UnityEngine.dll') And !Exists('$(RoR2ManagedPath)\UnityEngine.dll')">
-    <MakeDir Directories="$(LibRefPath)" />
-    <PropertyGroup>
-      <_FacadeSrc>$(IntermediateOutputPath)UnityEngineFacade.cs</_FacadeSrc>
-      <_FacadeDll>$(LibRefPath)\UnityEngine.dll</_FacadeDll>
-      <_CscToolPath Condition="'$(CscToolPath)' == ''">$(MSBuildToolsPath)</_CscToolPath>
-    </PropertyGroup>
-    <WriteLinesToFile File="$(_FacadeSrc)" Overwrite="true"
-      Lines="using System;%0Anamespace UnityEngine {%0A    public class Object {}%0A    public class Component : Object {}%0A    public class Behaviour : Component {}%0A    public class MonoBehaviour : Behaviour {}%0A}" />
-    <Exec Command='"$(_CscToolPath)\csc.exe" /nologo /target:library /out:"$(_FacadeDll)" "$(_FacadeSrc)"'
-          IgnoreExitCode="true" ContinueOnError="true" />
-    <Message Importance="high" Condition="Exists('$(_FacadeDll)')"
-             Text="[RoR2FirstPersonBrawler] UnityEngine.dll не найден — создана временная facade-сборка в lib\ (только для компиляции). Для корректной работы положите настоящий UnityEngine.dll из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ в lib\." />
-    <Warning Condition="!Exists('$(_FacadeDll)')"
-             Text="[RoR2FirstPersonBrawler] Не удалось создать facade UnityEngine.dll (нет csc.exe по пути $(_CscToolPath)). Скопируйте UnityEngine.dll из Managed\ игры в lib\ вручную." />
-  </Target>
-
-  <!-- Режим A: всё, что лежит в lib\, становится ссылками автоматически -->
-  <ItemGroup Condition="Exists('$(LibRefPath)')">
+  <!-- Режим A: всё, что лежит в lib\, становится ссылками автоматически.
+       Активен только при наличии реальных DLL (см. HasLibMode выше). -->
+  <ItemGroup Condition="'$(HasLibMode)' == 'true'">
     <Reference Include="$(LibRefPath)\*.dll" />
   </ItemGroup>
 
