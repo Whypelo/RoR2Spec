@@ -18,6 +18,20 @@ RoR2 Specter Mod Spec
      ```
 3. Откройте `RoR2FirstPersonBrawler/RoR2FirstPersonBrawler.sln`, выполните **Restore → Build**. После сборки DLL и `manifest.json` автоматически копируются в `<игра>\BepInEx\plugins\RoR2FirstPersonBrawler\`.
 
+### Ошибки «не найден тип или имя пространства имен RoR2 / UnityEngine / BepInEx»
+
+Эти ошибки (CS0246) означают, что компилятор не увидел DLL игры — то есть путь `RoR2Path` не задан или указан неверно, либо в игре не установлен BepInEx. Чек-лист:
+
+1. Проверьте, что файлы реально существуют:
+   - `<игра>\Risk of Rain 2_Data\Managed\Assembly-CSharp.dll`
+   - `<игра>\Risk of Rain 2_Data\Managed\UnityEngine.CoreModule.dll`
+   - `<игра>\BepInEx\core\BepInEx.dll` и `<игра>\BepInEx\core\0Harmony.dll`
+   - `<игра>\BepInEx\plugins\R2API.dll` (если мод использует R2API)
+2. Задайте путь к игре (см. п. 2 выше) и перезапустите VS после изменения переменной окружения (VS наследует окружение при запуске).
+3. В Output окна сборки должно появиться явное предупреждение `[RoR2FirstPersonBrawler] Не найдена игра по пути: ...` — если оно есть, путь точно неверный; если его нет, а ошибки остаются — сделайте **Build → Clean Solution**, удалите папки `bin\` и `obj\`, затем Restore → Rebuild.
+4. Если IntelliSense всё ещё подчёркивает типы, но сборка проходит — закройте решение и удалите скрытую папку `.vs\` в корне (кэш Roslyn Language Service), затем откройте заново.
+5. Убедитесь, что это **Risk of Rain 2** (не Return of Obelisk и не другая игра): пути к Managed-сборкам специфичны для RoR2.
+
 ### Что изменилось при переносе с VS2022
 | Было (VS2022, legacy) | Стало (VS2026) |
 |---|---|

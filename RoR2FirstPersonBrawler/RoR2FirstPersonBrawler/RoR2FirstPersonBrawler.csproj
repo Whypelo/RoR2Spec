@@ -43,8 +43,20 @@
 
   <PropertyGroup>
     <!-- Legacy API-совместимость поведения компилятора для UnityEngine-сборок -->
-    <NoWarn>$(NoWarn);CS0618</NoWarn>
+    <NoWarn>$(NoWarn);CS0618;MSB3245;MSB3243</NoWarn>
   </PropertyGroup>
+
+  <!--
+    Предупреждение вместо ошибки, если DLL игры/BepInEx не найдены.
+    Без этого сборка падает с NETSDK1047 ещё до компиляции, и IntelliSense
+    в редакторе не может разрешить типы RoR2/UnityEngine/BepInEx.
+  -->
+  <Target Name="WarnMissingGameReferences" BeforeTargets="ResolveAssemblyReferences;CoreCompile">
+    <Warning Condition="!Exists('$(RoR2ManagedPath)\Assembly-CSharp.dll')"
+             Text="[RoR2FirstPersonBrawler] Не найдена игра по пути: $(RoR2ManagedPath). Укажите путь к Risk of Rain 2 (см. README) — ссылки на Assembly-CSharp/UnityEngine недоступны." />
+    <Warning Condition="!Exists('$(BepInExCorePath)\BepInEx.dll')"
+             Text="[RoR2FirstPersonBrawler] Не найден BepInEx по пути: $(BepInExCorePath). Установите BepInEx 5.x для Risk of Rain 2." />
+  </Target>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <DebugSymbols>true</DebugSymbols>
