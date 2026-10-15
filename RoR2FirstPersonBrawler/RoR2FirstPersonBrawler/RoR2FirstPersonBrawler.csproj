@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{7A6B5E21-9C3D-4F1A-8E77-2B0D1C4A9F31}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>RoR2FirstPersonBrawler</RootNamespace>
+    <AssemblyName>RoR2FirstPersonBrawler</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <LangVersion>7.3</LangVersion>
+    <Deterministic>true</Deterministic>
+    <!-- Путь к установленной игре задаётся в RoR2FirstPersonBrawler.csproj.user
+         или переменной окружения RoR2_PATH (по умолчанию: Steam-директория). -->
+    <RoR2Path Condition="'$(RoR2Path)' == '' And '$(RoR2_PATH)' != ''">$(RoR2_PATH)</RoR2Path>
+    <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
+    <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- BepInEx / Harmony -->
+    <Reference Include="BepInEx">
+      <HintPath>$(RoR2Path)\BepInEx\core\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(RoR2Path)\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- R2API и его подмодули -->
+    <Reference Include="R2API">
+      <HintPath>$(BepInExPluginPath)\R2API.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Игровые сборки -->
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(RoR2ManagedPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(RoR2ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.Networking">
+      <HintPath>$(RoR2ManagedPath)\UnityEngine.Networking.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="FirstPersonBrawlerPlugin.cs" />
+    <Compile Include="LanguageLoader.cs" />
+    <Compile Include="Effects.cs" />
+    <Compile Include="Survivors\ContentPack.cs" />
+    <Compile Include="Survivors\Icons.cs" />
+    <Compile Include="Survivors\SpecterBody.cs" />
+    <Compile Include="Survivors\SpecterDisplay.cs" />
+    <Compile Include="Survivors\SpecterMaster.cs" />
+    <Compile Include="Survivors\SpecterSkills.cs" />
+    <Compile Include="Survivors\SpecterSurvivor.cs" />
+    <Compile Include="Skills\Primary\PhaseSlash.cs" />
+    <Compile Include="Skills\Primary\PhaseSlashCombo.cs" />
+    <Compile Include="Skills\Secondary\RiftStrike.cs" />
+    <Compile Include="Skills\Utility\PhaseShift.cs" />
+    <Compile Include="Skills\Special\VoidEruption.cs" />
+    <Compile Include="EntityStates\PhaseSlashStates.cs" />
+    <Compile Include="EntityStates\RiftStrikeState.cs" />
+    <Compile Include="EntityStates\PhaseShiftState.cs" />
+    <Compile Include="EntityStates\VoidEruptionState.cs" />
+    <Compile Include="Camera\CameraConfig.cs" />
+    <Compile Include="Camera\FirstPersonCameraController.cs" />
+    <Compile Include="Patches\CameraPatches.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Ресурсы мода: AssetBundle префаба, иконки, звуки (добавляются на этапе 3/5) -->
+    <None Include="Assets\**" />
+    <None Include="manifest.json" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- Post-build: копируем DLL + manifest в BepInEx/plugins для локального теста -->
+  <PropertyGroup>
+    <PostBuildEvent Condition="'$(RoR2Path)' != ''">xcopy /Y "$(TargetPath)" "$(BepInExPluginPath)\RoR2FirstPersonBrawler\" && xcopy /Y "$(ProjectDir)manifest.json" "$(BepInExPluginPath)\RoR2FirstPersonBrawler\"</PostBuildEvent>
+  </PropertyGroup>
+</Project>

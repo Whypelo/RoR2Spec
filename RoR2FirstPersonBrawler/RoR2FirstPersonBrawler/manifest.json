@@ -1,0 +1,10 @@
+{
+  "name": "RoR2FirstPersonBrawler",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/author/ror2firstpersonbrawler",
+  "description": "Specter — melee survivor with Phase Shift mechanic and true first-person camera for Risk of Rain 2.",
+  "dependencies": [
+    "bbepis-BepInExPack-5.4.2117",
+    "riskofthunder-R2API-4.7.2"
+  ]
+}
