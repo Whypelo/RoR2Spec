@@ -194,26 +194,29 @@
   <Target Name="ValidateLibReferences" BeforeTargets="ResolveAssemblyReferences"
           Condition="'$(HasLibMode)' == 'true'">
     <PropertyGroup>
-      <!-- Порог в КБ: заглушки — единицы КБ; настоящие DLL — сотни КБ…МБ -->
-      <_FacadeSizeThresholdKb>100</_FacadeSizeThresholdKb>
+      <!-- Порог в байтах: заглушки — единицы КБ; настоящие DLL — сотни КБ…МБ -->
+      <_FacadeSizeThresholdBytes>102400</_FacadeSizeThresholdBytes>
     </PropertyGroup>
-    <ItemGroup>
-      <_LibCheck Include="Assembly-CSharp.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;BepInEx.dll">
-        <Full>$([System.IO.Path]::Combine('$(LibRefPath)', '%(Identity)'))</Full>
-      </_LibCheck>
-      <_LibCheck Update="@(_LibCheck)"
-                 Size="$([System.IO.File]::ReadAllBytes('%(Full)').Length)"
-                 Condition="Exists('%(Full)')" />
-      <!-- Размер в КБ (деление даёт целочисленное значение; заглушка ~несколько КБ) -->
-      <_LibCheck Update="@(_LibCheck)"
-                 SizeKb="$([MSBuild]::Divide('%(_LibCheck.Size)', 1024).ToString('0'))"
-                 Condition="'%(_LibCheck.Size)' != ''" />
-      <_FakeLibRefs Include="@(_LibCheck)"
-                    Condition="'%(_LibCheck.SizeKb)' != '' And $([MSBuild]::ValueOrDefault('%(_LibCheck.SizeKb)','9999').CompareTo($([MSBuild]::ParseEvalString('$(_FacadeSizeThresholdKb)')))) &lt; 0" />
+    <!-- Получаем размеры файлов (в байтах) через Get-Item.Length.
+         Property-функции вида $([System.IO.File]::...('%(Item)')) MSBuild не вычисляет
+         поэлементно, а inline-таски не умеют возвращать значения в metadata — поэтому
+         вывод парсится из stdout Exec. Путь передаётся как аргумент скрипта, чтобы
+         избежать проблем с кавычками/пробелами. -->
+    <Exec Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;$names = @('Assembly-CSharp.dll','UnityEngine.dll','UnityEngine.CoreModule.dll','BepInEx.dll'); foreach($n in $names){ $p = Join-Path -Path ([IO.Path]::GetFullPath('$(LibRefPath)')) -ChildPath $n; if(Test-Path -LiteralPath $p -PathType Leaf){ Write-Output ($n + '=' + (Get-Item -LiteralPath $p).Length) } }&quot;"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_LibSizeLines" />
+    </Exec>
+    <ItemGroup Condition="'@(_LibSizeLines)' != ''">
+      <_FakeLibRefs Include="%(_LibSizeLines.Identity)"
+                    Condition="$([MSBuild]::Divide([System.Int64]::Parse('%(Identity)'.Split('=').Last()), 1).ToString('0')) != '' And
+                             [System.Int64]::Parse('%(Identity)'.Split('=').Last()).CompareTo($([MSBuild]::ParseEvalString('$(_FacadeSizeThresholdBytes)'))) &lt; 0">
+        <DllName>%(_FakeLibRefs.Identity.Split('=').First())</DllName>
+        <Full>$(LibRefPath)\%(_FakeLibRefs.DllName)</Full>
+      </_FakeLibRefs>
     </ItemGroup>
     <Delete Files="%(_FakeLibRefs.Full)" Condition="'@(_FakeLibRefs)' != ''" />
     <Error Condition="'@(_FakeLibRefs)' != ''"
-           Text="[RoR2FirstPersonBrawler] В lib\ обнаружены НЕ НАСТОЯЩИЕ (синтетические facade-) сборки: @(_FakeLibRefs->'%(Identity)', ', '). Они были сгенерированы предыдущей версией проекта и удалены при сборке. Ошибки вида «тип BuffDef/HealthComponent не найден в RoR2» вызваны именно ими. Скопируйте настоящие DLL из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ и &lt;игра&gt;\BepInEx\core\ в lib\ и пересоберите решение." />
+           Text="[RoR2FirstPersonBrawler] В lib\ обнаружены НЕ НАСТОЯЩИЕ (синтетические facade-) сборки: @(_FakeLibRefs->'%(DllName)', ', '). Они были сгенерированы предыдущей версией проекта и удалены при сборке. Ошибки вида «тип BuffDef/HealthComponent не найден в RoR2» вызваны именно ими. Скопируйте настоящие DLL из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ и &lt;игра&gt;\BepInEx\core\ в lib\ и пересоберите решение." />
   </Target>
 
   <!-- Режим A: всё, что лежит в lib\, становится ссылками автоматически.
