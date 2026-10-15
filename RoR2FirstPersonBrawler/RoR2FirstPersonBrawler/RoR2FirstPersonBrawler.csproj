@@ -59,15 +59,18 @@
     вместо десятков безликих CS0246 («Не удалось найти тип ... RoR2/UnityEngine/BepInEx»).
     Причина именно в отсутствии путей к игре, а не в коде мода.
   -->
-  <ItemGroup>
-    <_GameRefFiles Include="$(RoR2ManagedPath)\Assembly-CSharp.dll;$(RoR2ManagedPath)\UnityEngine.CoreModule.dll;$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll;$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll;$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll;$(RoR2ManagedPath)\UnityEngine.Networking.dll;$(BepInExCorePath)\BepInEx.dll;$(BepInExCorePath)\0Harmony.dll;$(BepInExPluginPath)\R2API.dll" />
-    <_MissingGameRefs Include="@(_GameRefFiles)" Condition="!Exists('%(Identity)')" />
-  </ItemGroup>
   <Target Name="DiagnoseGameReferences" BeforeTargets="BeforeBuild;CoreCompile">
+    <ItemGroup>
+      <!-- Проверка выполняется ВНУТРИ target: на уровне глобального ItemGroup
+       %(Identity) недоступен в Condition, что вызывало ошибку MSBuild
+       «ссылка на встроенные метаданные "Identity" ... не разрешена в условии». -->
+      <_GameRefFiles Include="$(RoR2ManagedPath)\Assembly-CSharp.dll;$(RoR2ManagedPath)\UnityEngine.CoreModule.dll;$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll;$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll;$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll;$(RoR2ManagedPath)\UnityEngine.Networking.dll;$(BepInExCorePath)\BepInEx.dll;$(BepInExCorePath)\0Harmony.dll;$(BepInExPluginPath)\R2API.dll" />
+      <_MissingGameRefs Include="@(_GameRefFiles)" Condition="!Exists('%(FullPath)')" />
+    </ItemGroup>
     <Error Condition="'@(_MissingGameRefs)' != '' And '$(DiagnoseOnly)' == 'true'"
            Text="RoR2Path = '$(RoR2Path)'. Отсутствуют файлы: @(_MissingGameRefs -> '%(Filename)%(Extension)', ' | '). Исправьте путь (RoR2_PATH / csproj.user) и перезапустите Visual Studio." />
     <Warning Condition="'@(_MissingGameRefs)' != ''"
-             Text="[RoR2FirstPersonBrawler] ВНИМАНИЕ: не найдено @( _MissingGameRefs -> '%(Filename)%(Extension)', ', '). Текущий RoR2Path = '$(RoR2Path)'. Ошибки CS0246 (неизвестные типы RoR2/UnityEngine/BepInEx) вызваны ИМЕННО отсутствием этих DLL, а не кодом. См. README ('Путь к игре') — после смены пути нужно закрыть VS, удалить bin/obj/.vs и заново открыть решение." />
+             Text="[RoR2FirstPersonBrawler] ВНИМАНИЕ: не найдено @(_MissingGameRefs -> '%(Filename)%(Extension)', ', '). Текущий RoR2Path = '$(RoR2Path)'. Ошибки CS0246 (неизвестные типы RoR2/UnityEngine/BepInEx) вызваны ИМЕННО отсутствием этих DLL, а не кодом. См. README ('Путь к игре') — после смены пути нужно закрыть VS, удалить bin/obj/.vs и заново открыть решение." />
   </Target>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
