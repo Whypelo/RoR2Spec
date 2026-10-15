@@ -43,19 +43,31 @@
 
   <PropertyGroup>
     <!-- Legacy API-совместимость поведения компилятора для UnityEngine-сборок -->
-    <NoWarn>$(NoWarn);CS0618;MSB3245;MSB3243</NoWarn>
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+    <!-- Критично для SDK-style проекта net35: без отключенияimplicit-ссылок на
+         Microsoft.NETCore.App проект пытается разрешить System.* из .NET Core
+         и сборка/IntelliSense падают ещё до компиляции игровых ссылок. -->
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <!-- Сборка не должна «падать» только из-за отсутствующих DLL игры:
+         сначала покажем внятную диагностику (см. Target DiagnoseGameReferences). -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3245;MSB3243</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
   <!--
-    Предупреждение вместо ошибки, если DLL игры/BepInEx не найдены.
-    Без этого сборка падает с NETSDK1047 ещё до компиляции, и IntelliSense
-    в редакторе не может разрешить типы RoR2/UnityEngine/BepInEx.
+    Диагностика: если DLL игры/BepInEx не найдены, показываем ОДНО понятное
+    сообщение со всеми недостающими файлами и текущим значением RoR2Path —
+    вместо десятков безликих CS0246 («Не удалось найти тип ... RoR2/UnityEngine/BepInEx»).
+    Причина именно в отсутствии путей к игре, а не в коде мода.
   -->
-  <Target Name="WarnMissingGameReferences" BeforeTargets="ResolveAssemblyReferences;CoreCompile">
-    <Warning Condition="!Exists('$(RoR2ManagedPath)\Assembly-CSharp.dll')"
-             Text="[RoR2FirstPersonBrawler] Не найдена игра по пути: $(RoR2ManagedPath). Укажите путь к Risk of Rain 2 (см. README) — ссылки на Assembly-CSharp/UnityEngine недоступны." />
-    <Warning Condition="!Exists('$(BepInExCorePath)\BepInEx.dll')"
-             Text="[RoR2FirstPersonBrawler] Не найден BepInEx по пути: $(BepInExCorePath). Установите BepInEx 5.x для Risk of Rain 2." />
+  <ItemGroup>
+    <_GameRefFiles Include="$(RoR2ManagedPath)\Assembly-CSharp.dll;$(RoR2ManagedPath)\UnityEngine.CoreModule.dll;$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll;$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll;$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll;$(RoR2ManagedPath)\UnityEngine.Networking.dll;$(BepInExCorePath)\BepInEx.dll;$(BepInExCorePath)\0Harmony.dll;$(BepInExPluginPath)\R2API.dll" />
+    <_MissingGameRefs Include="@(_GameRefFiles)" Condition="!Exists('%(Identity)')" />
+  </ItemGroup>
+  <Target Name="DiagnoseGameReferences" BeforeTargets="BeforeBuild;CoreCompile">
+    <Error Condition="'@(_MissingGameRefs)' != '' And '$(DiagnoseOnly)' == 'true'"
+           Text="RoR2Path = '$(RoR2Path)'. Отсутствуют файлы: @(_MissingGameRefs -> '%(Filename)%(Extension)', ' | '). Исправьте путь (RoR2_PATH / csproj.user) и перезапустите Visual Studio." />
+    <Warning Condition="'@(_MissingGameRefs)' != ''"
+             Text="[RoR2FirstPersonBrawler] ВНИМАНИЕ: не найдено @( _MissingGameRefs -> '%(Filename)%(Extension)', ', '). Текущий RoR2Path = '$(RoR2Path)'. Ошибки CS0246 (неизвестные типы RoR2/UnityEngine/BepInEx) вызваны ИМЕННО отсутствием этих DLL, а не кодом. См. README ('Путь к игре') — после смены пути нужно закрыть VS, удалить bin/obj/.vs и заново открыть решение." />
   </Target>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
@@ -77,12 +89,39 @@
       3. Значение по умолчанию: стандартная Steam-директория
   -->
   <PropertyGroup>
-    <RoR2Path Condition="'$(RoR2Path)' == '' And '$(RoR2_PATH)' != ''">$(RoR2_PATH)</RoR2Path>
+    <!-- Убираем возможные хвостовые обратные слеши (частая причина «путь не найден»,
+         особенно при копировании из проводника: "D:\Steam\Risk of Rain 2\") -->
+    <RoR2Path Condition="'$(RoR2Path)' != ''">$(RoR2Path.TrimEnd('\'))</RoR2Path>
+    <RoR2Path Condition="'$(RoR2Path)' == '' And '$(RoR2_PATH)' != ''">$(RoR2_PATH.TrimEnd('\'))</RoR2Path>
     <RoR2Path Condition="'$(RoR2Path)' == '' And ('$(OS)' == 'Windows_NT')">C:\Program Files (x86)\Steam\steamapps\common\Risk of Rain 2</RoR2Path>
     <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
     <BepInExCorePath>$(RoR2Path)\BepInEx\core</BepInExCorePath>
     <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
   </PropertyGroup>
+
+  <!--
+    Автоопределение пути к игре через реестр Steam (HKLM\SOFTWARE\WOW6432Node\Valve\Steam -> InstallPath)
+    и библиотеки Steam (libraryfolders.vdf), если явный путь не задан или невалиден.
+    Выполняется только на Windows и только когда Assembly-CSharp.dll по текущему пути не найден.
+  -->
+  <Target Name="AutoDetectRoR2Path" BeforeTargets="DiagnoseGameReferences;ResolveAssemblyReferences"
+          Condition="'$(OS)' == 'Windows_NT' And !Exists('$(RoR2ManagedPath)\Assembly-CSharp.dll')">
+    <!-- reg query возвращает строку вида: "...    InstallPath    REG_SZ    C:\Program Files (x86)\Steam" -->
+    <Exec Command='reg query "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam" /v InstallPath'
+          IgnoreExitCode="true" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_SteamRegOut" />
+    </Exec>
+    <PropertyGroup>
+      <_SteamInstallRaw Condition="'$(_SteamRegOut)' != '' And $(_SteamRegOut.Contains('REG_SZ'))">$(_SteamRegOut.Substring($(_SteamRegOut.LastIndexOf('REG_SZ')) + 6).Trim())</_SteamInstallRaw>
+      <_SteamAppPath Condition="'$(_SteamInstallRaw)' != ''">$(_SteamInstallRaw.TrimEnd('\'))\steamapps\common\Risk of Rain 2</_SteamAppPath>
+      <RoR2Path Condition="'$(_SteamAppPath)' != '' And Exists('$(_SteamAppPath)\Risk of Rain 2_Data\Managed\Assembly-CSharp.dll')">$(_SteamAppPath)</RoR2Path>
+      <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
+      <BepInExCorePath>$(RoR2Path)\BepInEx\core</BepInExCorePath>
+      <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
+    </PropertyGroup>
+    <Message Importance="high" Condition="Exists('$(RoR2ManagedPath)\Assembly-CSharp.dll')"
+             Text="[RoR2FirstPersonBrawler] Путь к игре определён автоматически: $(RoR2Path)" />
+  </Target>
 
   <ItemGroup>
     <!-- BepInEx / Harmony -->
