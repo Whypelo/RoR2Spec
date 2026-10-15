@@ -51,6 +51,9 @@
     <!-- Сборка не должна «падать» только из-за отсутствующих DLL игры:
          сначала покажем внятную диагностику (см. Target DiagnoseGameReferences). -->
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3245;MSB3243</MSBuildWarningsAsMessages>
+    <!-- Папка для «ручного» подключения зависимостей: все *.dll из неё
+         становятся ссылками автоматически, путь к игре тогда не нужен. -->
+    <LibRefPath>$(MSBuildProjectDirectory)\lib</LibRefPath>
   </PropertyGroup>
 
   <!--
@@ -63,14 +66,19 @@
     <ItemGroup>
       <!-- Проверка выполняется ВНУТРИ target: на уровне глобального ItemGroup
        %(Identity) недоступен в Condition, что вызывало ошибку MSBuild
-       «ссылка на встроенные метаданные "Identity" ... не разрешена в условии». -->
-      <_GameRefFiles Include="$(RoR2ManagedPath)\Assembly-CSharp.dll;$(RoR2ManagedPath)\UnityEngine.CoreModule.dll;$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll;$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll;$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll;$(RoR2ManagedPath)\UnityEngine.Networking.dll;$(BepInExCorePath)\BepInEx.dll;$(BepInExCorePath)\0Harmony.dll;$(BepInExPluginPath)\R2API.dll" />
-      <_MissingGameRefs Include="@(_GameRefFiles)" Condition="!Exists('%(FullPath)')" />
+       «ссылка на встроенные метаданные "Identity" ... не разрешена в условии».
+       Файл считается найденным, если он есть в lib\ ИЛИ по пути к игре. -->
+      <_GameRefSpec Include="Assembly-CSharp.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;UnityEngine.Networking.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
+      <_FoundGameRefs Include="@(_GameRefSpec->'$(LibRefPath)\%(Identity)')" Condition="Exists('$(LibRefPath)\%(_GameRefSpec.Identity)')" />
+      <_FoundGameRefs Include="@(_GameRefSpec->'$(RoR2ManagedPath)\%(Identity)')" Condition="Exists('$(RoR2ManagedPath)\%(_GameRefSpec.Identity)')" />
+      <_FoundGameRefs Include="@(_GameRefSpec->'$(BepInExCorePath)\%(Identity)')" Condition="Exists('$(BepInExCorePath)\%(_GameRefSpec.Identity)')" />
+      <_FoundGameRefs Include="@(_GameRefSpec->'$(BepInExPluginPath)\%(Identity)')" Condition="Exists('$(BepInExPluginPath)\%(_GameRefSpec.Identity)')" />
+      <_MissingGameRefs Include="@(_GameRefSpec)" Exclude="@(_FoundGameRefs->'%(Filename)%(Extension)')" />
     </ItemGroup>
     <Error Condition="'@(_MissingGameRefs)' != '' And '$(DiagnoseOnly)' == 'true'"
-           Text="RoR2Path = '$(RoR2Path)'. Отсутствуют файлы: @(_MissingGameRefs -> '%(Filename)%(Extension)', ' | '). Исправьте путь (RoR2_PATH / csproj.user) и перезапустите Visual Studio." />
+           Text="Отсутствуют сборки: @(_MissingGameRefs, ' | '). RoR2Path = '$(RoR2Path)', lib\ = '$(LibRefPath)'. Скопируйте DLL в lib\ (см. README, раздел «Ручное подключение зависимостей») или задайте верный путь к игре." />
     <Warning Condition="'@(_MissingGameRefs)' != ''"
-             Text="[RoR2FirstPersonBrawler] ВНИМАНИЕ: не найдено @(_MissingGameRefs -> '%(Filename)%(Extension)', ', '). Текущий RoR2Path = '$(RoR2Path)'. Ошибки CS0246 (неизвестные типы RoR2/UnityEngine/BepInEx) вызваны ИМЕННО отсутствием этих DLL, а не кодом. См. README ('Путь к игре') — после смены пути нужно закрыть VS, удалить bin/obj/.vs и заново открыть решение." />
+             Text="[RoR2FirstPersonBrawler] ВНИМАНИЕ: не найдено @(_MissingGameRefs, ', '). RoR2Path = '$(RoR2Path)', папка lib\ = '$(LibRefPath)'. Ошибки CS0246 (неизвестные типы RoR2/UnityEngine/BepInEx) вызваны ИМЕННО отсутствием этих DLL, а не кодом. Проще всего скопировать их в lib\ — см. README, раздел «Ручное подключение зависимостей»." />
   </Target>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
@@ -126,48 +134,73 @@
              Text="[RoR2FirstPersonBrawler] Путь к игре определён автоматически: $(RoR2Path)" />
   </Target>
 
+  <!--
+    Ссылки на DLL игры. ДВА режима:
+
+    Режим A (рекомендуемый, «ручной»): создайте рядом с csproj папку lib\
+    и скопируйте в неё нужные DLL (список ниже). Тогда пути к игре вообще
+    не нужны — сборка полностью автономна и одинакова на любой машине.
+
+    Режим B: ссылки через путь к игре $(RoR2Path) (переменная окружения
+    RoR2_PATH или файл .csproj.user; см. README).
+    Если DLL нет ни в lib\, ни по пути к игре — включите режим A и
+    скопируйте файлы вручную (инструкция в README, раздел «Ручное
+    подключение зависимостей»).
+  -->
+  <ItemGroup>
+    <!-- Системные сборки net35 (берутся из targeting pack NuGet-пакета
+         Microsoft.NETFramework.ReferenceAssemblies — ставить что-либо руками не нужно) -->
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+
+  <!-- Режим A: всё, что лежит в lib\, становится ссылками автоматически -->
+  <ItemGroup Condition="Exists('$(LibRefPath)')">
+    <Reference Include="$(LibRefPath)\*.dll" />
+  </ItemGroup>
+
+  <!-- Режим B: те же сборки по путям игры — добавляются только если их НЕТ в lib\,
+       иначе будет конфликт дубликатах ссылок (MSB3271/CS1701) -->
   <ItemGroup>
     <!-- BepInEx / Harmony -->
-    <Reference Include="BepInEx">
+    <Reference Include="BepInEx" Condition="!Exists('$(LibRefPath)\BepInEx.dll')">
       <HintPath>$(BepInExCorePath)\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="0Harmony">
+    <Reference Include="0Harmony" Condition="!Exists('$(LibRefPath)\0Harmony.dll')">
       <HintPath>$(BepInExCorePath)\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <!-- R2API и его подмодули -->
-    <Reference Include="R2API">
+    <!-- R2API -->
+    <Reference Include="R2API" Condition="!Exists('$(LibRefPath)\R2API.dll')">
       <HintPath>$(BepInExPluginPath)\R2API.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <!-- Игровые сборки -->
-    <Reference Include="Assembly-CSharp">
+    <Reference Include="Assembly-CSharp" Condition="!Exists('$(LibRefPath)\Assembly-CSharp.dll')">
       <HintPath>$(RoR2ManagedPath)\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.CoreModule">
+    <Reference Include="UnityEngine.CoreModule" Condition="!Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.AnimationModule">
+    <Reference Include="UnityEngine.AnimationModule" Condition="!Exists('$(LibRefPath)\UnityEngine.AnimationModule.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.PhysicsModule">
+    <Reference Include="UnityEngine.PhysicsModule" Condition="!Exists('$(LibRefPath)\UnityEngine.PhysicsModule.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.AssetBundleModule">
+    <Reference Include="UnityEngine.AssetBundleModule" Condition="!Exists('$(LibRefPath)\UnityEngine.AssetBundleModule.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.Networking">
+    <Reference Include="UnityEngine.Networking" Condition="!Exists('$(LibRefPath)\UnityEngine.Networking.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.Networking.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
   </ItemGroup>
 
   <ItemGroup>

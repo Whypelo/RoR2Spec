@@ -2,3 +2,6 @@ bin/
 obj/
 *.user
 .vs/
+
+# Локальные DLL игры для автономной сборки (не коммитить — проприетарные файлы Steam)
+RoR2FirstPersonBrawler/RoR2FirstPersonBrawler/lib/

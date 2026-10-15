@@ -18,6 +18,42 @@ RoR2 Specter Mod Spec
      ```
 3. Откройте `RoR2FirstPersonBrawler/RoR2FirstPersonBrawler.sln`, выполните **Restore → Build**. После сборки DLL и `manifest.json` автоматически копируются в `<игра>\BepInEx\plugins\RoR2FirstPersonBrawler\`.
 
+### Ручное подключение зависимостей (рекомендуется, если путь к игре не определяется)
+
+Проект поддерживает режим автономных ссылок: создайте папку `lib` рядом с csproj
+(`RoR2FirstPersonBrawler\RoR2FirstPersonBrawler\lib\`) и скопируйте в неё DLL.
+Все `.dll` из `lib\` подхватываются как ссылки автоматически, а ссылки по пути к
+игре в этом режиме отключаются — `RoR2_PATH` задавать не нужно вообще.
+
+Минимальный набор файлов (из Steam-папки игры):
+
+| Файл | Откуда взять |
+|---|---|
+| `Assembly-CSharp.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
+| `UnityEngine.CoreModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
+| `UnityEngine.AnimationModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
+| `UnityEngine.PhysicsModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
+| `UnityEngine.AssetBundleModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
+| `UnityEngine.Networking.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
+| `BepInEx.dll`, `0Harmony.dll` | `<игра>\BepInEx\core\` |
+| `R2API.dll` | `<игра>\BepInEx\plugins\` |
+
+Быстрая копировалка из PowerShell (поправьте путь к игре при необходимости):
+
+```powershell
+$game = "C:\Program Files (x86)\Steam\steamapps\common\Risk of Rain 2"
+$lib  = "RoR2FirstPersonBrawler\RoR2FirstPersonBrawler\lib"
+New-Item -ItemType Directory -Force $lib | Out-Null
+Copy-Item "$game\Risk of Rain 2_Data\Managed\Assembly-CSharp.dll" $lib
+Copy-Item "$game\Risk of Rain 2_Data\Managed\UnityEngine.*Module.dll" $lib
+Copy-Item "$game\Risk of Rain 2_Data\Managed\UnityEngine.Networking.dll" $lib
+Copy-Item "$game\BepInEx\core\BepInEx.dll","$game\BepInEx\core\0Harmony.dll" $lib
+if (Test-Path "$game\BepInEx\plugins\R2API.dll") { Copy-Item "$game\BepInEx\plugins\R2API.dll" $lib }
+```
+
+После копирования: закройте VS → удалите `bin\`, `obj\`, `.vs\` → откройте sln → Restore → Rebuild.
+Папка `lib\` в `.gitignore` (DLL — проприетарные файлы Steam, их нельзя коммитить).
+
 ### Ошибки «не найден тип или имя пространства имен RoR2 / UnityEngine / BepInEx»
 
 Эти ошибки (CS0246) означают, что компилятор не увидел DLL игры — то есть путь `RoR2Path` не задан или указан неверно, либо в игре не установлен BepInEx. Начиная с этой версии проект сам определяет путь к Steam-установке (через реестр), а при проблемах выводит в Output одно явное сообщение `[RoR2FirstPersonBrawler] ВНИМАНИЕ: не найдено ...` со списком недостающих DLL и текущим `RoR2Path`. Чек-лист:
