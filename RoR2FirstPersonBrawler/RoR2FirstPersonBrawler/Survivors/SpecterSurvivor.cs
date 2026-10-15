@@ -5,7 +5,9 @@ using RoR2;
 using RoR2.CharacterAI;
 using R2API;
 using UnityEngine;
-using UnityEngine.Networking;
+// Примечание: `using UnityEngine.Networking;` не требуется — в актуальных билдах
+// RoR2 (Unity 2019.4+) типы NetworkIdentity/NetworkServer находятся в
+// Assembly-CSharp.dll, отдельной сборки UnityEngine.Networking в Managed\ нет.
 
 namespace RoR2FirstPersonBrawler.Survivors
 {

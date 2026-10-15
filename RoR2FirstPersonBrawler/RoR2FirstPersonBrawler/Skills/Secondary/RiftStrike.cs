@@ -1,7 +1,6 @@
 using RoR2;
 using RoR2.SkillSlots;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace RoR2FirstPersonBrawler.Skills.Secondary
 {
@@ -87,7 +86,7 @@ namespace RoR2FirstPersonBrawler.Skills.Secondary
                 var body = character ? character.GetComponent<CharacterBody>() : null;
                 if (body && body.master) master = body.master;
             }
-            if (!master || !NetworkServer.active) return;
+            if (!master || !UnityEngine.Networking.NetworkServer.active) return;
 
             var slotMaster = master.GetComponents<CharacterSkillSlotMaster>()[1]; // secondary
             slotMaster.AddCooldown(-CooldownReductionOnHit);

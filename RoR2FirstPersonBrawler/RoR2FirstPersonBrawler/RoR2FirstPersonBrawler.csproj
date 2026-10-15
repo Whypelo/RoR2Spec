@@ -32,6 +32,11 @@
          Единственный пакет — reference assemblies для net35 (аналог targeting pack из
          VS Installer; в VS2026 отдельный компонент ставить не нужно). -->
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <!-- RoR2/BepInEx — x86-сборки (MSIL без 32BITREQUIRED), поэтому сам плагин
+         тоже компилируется как x86 (AnyCPU+Prefer32Bit в net35 не поддерживается).
+         Это убирает предупреждение MSB3270 «несоответствие архитектур MSIL/x86». -->
+    <PlatformTarget>x86</PlatformTarget>
+    <AssemblyOriginatorKeyFile></AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -68,7 +73,11 @@
        %(Identity) недоступен в Condition, что вызывало ошибку MSBuild
        «ссылка на встроенные метаданные "Identity" ... не разрешена в условии».
        Файл считается найденным, если он есть в lib\ ИЛИ по пути к игре. -->
-      <_GameRefSpec Include="Assembly-CSharp.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;UnityEngine.Networking.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
+      <!-- UnityEngine.Networking.dll намеренно НЕ включён: в современных билдах
+           RoR2 (Unity 2019.4+) классической UNet-сборки нет — типы NetworkServer/
+           NetworkIdentity реплицируются в Assembly-CSharp.dll. Мод использует их
+           только оттуда, отдельная ссылка не требуется. -->
+      <_GameRefSpec Include="Assembly-CSharp.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(LibRefPath)\%(Identity)')" Condition="Exists('$(LibRefPath)\%(_GameRefSpec.Identity)')" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(RoR2ManagedPath)\%(Identity)')" Condition="Exists('$(RoR2ManagedPath)\%(_GameRefSpec.Identity)')" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(BepInExCorePath)\%(Identity)')" Condition="Exists('$(BepInExCorePath)\%(_GameRefSpec.Identity)')" />
@@ -197,10 +206,10 @@
       <HintPath>$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.Networking" Condition="!Exists('$(LibRefPath)\UnityEngine.Networking.dll')">
-      <HintPath>$(RoR2ManagedPath)\UnityEngine.Networking.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+    <!-- Ссылка UnityEngine.Networking НЕ добавляется: в текущих билдах RoR2
+         (Unity 2019.4 LTS+) отдельной UNet-сборки в Managed\ нет, типы
+         NetworkServer/NetworkIdentity/NetworkUserCharacterMotor находятся в
+         Assembly-CSharp.dll. -->
   </ItemGroup>
 
   <ItemGroup>

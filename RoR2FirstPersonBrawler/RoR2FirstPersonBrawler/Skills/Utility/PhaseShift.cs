@@ -1,7 +1,6 @@
 using RoR2;
 using RoR2.SkillSlots;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace RoR2FirstPersonBrawler.Skills.Utility
 {
@@ -49,7 +48,7 @@ namespace RoR2FirstPersonBrawler.Skills.Utility
             if (!body) return;
 
             // 1. Визуальный бафф-статус (иконка над головой / HUD).
-            if (NetworkServer.active && Survivors.ContentPack.phaseShiftBuff)
+            if (UnityEngine.Networking.NetworkServer.active && Survivors.ContentPack.phaseShiftBuff)
             {
                 var hc = character.GetComponent<HealthComponent>();
                 if (hc) hc.AddBuff(Survivors.ContentPack.phaseShiftBuff, Time.time + Duration);

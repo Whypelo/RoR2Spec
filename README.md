@@ -34,9 +34,12 @@ RoR2 Specter Mod Spec
 | `UnityEngine.AnimationModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
 | `UnityEngine.PhysicsModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
 | `UnityEngine.AssetBundleModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
-| `UnityEngine.Networking.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
 | `BepInEx.dll`, `0Harmony.dll` | `<игра>\BepInEx\core\` |
 | `R2API.dll` | `<игра>\BepInEx\plugins\` |
+
+> **Важно:** `UnityEngine.Networking.dll` копировать НЕ нужно — в актуальных билдах
+> RoR2 (Unity 2019.4+) такой сборки в папке `Managed\` нет, сетевые типы
+> (`NetworkServer`, `NetworkIdentity`) находятся внутри `Assembly-CSharp.dll`.
 
 Быстрая копировалка из PowerShell (поправьте путь к игре при необходимости):
 
@@ -46,7 +49,6 @@ $lib  = "RoR2FirstPersonBrawler\RoR2FirstPersonBrawler\lib"
 New-Item -ItemType Directory -Force $lib | Out-Null
 Copy-Item "$game\Risk of Rain 2_Data\Managed\Assembly-CSharp.dll" $lib
 Copy-Item "$game\Risk of Rain 2_Data\Managed\UnityEngine.*Module.dll" $lib
-Copy-Item "$game\Risk of Rain 2_Data\Managed\UnityEngine.Networking.dll" $lib
 Copy-Item "$game\BepInEx\core\BepInEx.dll","$game\BepInEx\core\0Harmony.dll" $lib
 if (Test-Path "$game\BepInEx\plugins\R2API.dll") { Copy-Item "$game\BepInEx\plugins\R2API.dll" $lib }
 ```
