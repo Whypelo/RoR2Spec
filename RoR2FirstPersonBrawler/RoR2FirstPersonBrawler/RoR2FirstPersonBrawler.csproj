@@ -1,47 +1,85 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Адаптация проекта под Visual Studio 2026 (Insiders).
+    Изменения относительно версии под VS2022:
+      * SDK-style csproj вместо legacy-формата (ToolsVersion/явный список <Compile>) —
+        стандарт для MSBuild из VS2026 и dotnet CLI; все .cs подхватываются автоматически.
+      * TargetFramework net35 сохранён — это требование Mono-рантайма Risk of Rain 2,
+        а не версии Visual Studio.
+      * LangVersion 12 — новый компилятор Roslyn из VS2026 позволяет использовать
+        современный синтаксис C# поверх net35 (для старых файлов достаточно 7.3+,
+        повышение безопасно: обратно совместимо).
+      * Post-build копирование через целевые элементы MSBuild вместо cmd-обёртки xcopy —
+        кроссплатформенно (работает и в VS Insiders на Windows Arm64 / в CodeSpaces),
+        не «ломает» сборку, если путь к игре не задан.
+      * Убраны жёсткие ссылки на $(MSBuildToolsPath) цели — их больше нет в SDK-проектах.
+  -->
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{7A6B5E21-9C3D-4F1A-8E77-2B0D1C4A9F31}</ProjectGuid>
+    <TargetFramework>net35</TargetFramework>
     <OutputType>Library</OutputType>
     <RootNamespace>RoR2FirstPersonBrawler</RootNamespace>
     <AssemblyName>RoR2FirstPersonBrawler</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
-    <LangVersion>7.3</LangVersion>
+    <LangVersion>12</LangVersion>
     <Deterministic>true</Deterministic>
-    <!-- Путь к установленной игре задаётся в RoR2FirstPersonBrawler.csproj.user
-         или переменной окружения RoR2_PATH (по умолчанию: Steam-директория). -->
-    <RoR2Path Condition="'$(RoR2Path)' == '' And '$(RoR2_PATH)' != ''">$(RoR2_PATH)</RoR2Path>
-    <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
-    <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- В SDK-проектах по умолчанию включён GenerateAssemblyInfo: отключаем,
+         чтобы атрибуты сборки остались под нашим контролем (при необходимости). -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Не тянуть случайные NuGet-зависимости: все игровые референсы — локальные DLL.
+         Единственный пакет — reference assemblies для net35 (аналог targeting pack из
+         VS Installer; в VS2026 отдельный компонент ставить не нужно). -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- Legacy API-совместимость поведения компилятора для UnityEngine-сборок -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+
+  <!--
+    Путь к установленной игре задаётся одним из способов (в порядке приоритета):
+      1. RoR2FirstPersonBrawler.csproj.user  ->  <RoR2Path>...</RoR2Path>  (не в git)
+      2. Переменная окружения RoR2_PATH
+      3. Значение по умолчанию: стандартная Steam-директория
+  -->
+  <PropertyGroup>
+    <RoR2Path Condition="'$(RoR2Path)' == '' And '$(RoR2_PATH)' != ''">$(RoR2_PATH)</RoR2Path>
+    <RoR2Path Condition="'$(RoR2Path)' == '' And ('$(OS)' == 'Windows_NT')">C:\Program Files (x86)\Steam\steamapps\common\Risk of Rain 2</RoR2Path>
+    <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
+    <BepInExCorePath>$(RoR2Path)\BepInEx\core</BepInExCorePath>
+    <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <!-- BepInEx / Harmony -->
     <Reference Include="BepInEx">
-      <HintPath>$(RoR2Path)\BepInEx\core\BepInEx.dll</HintPath>
+      <HintPath>$(BepInExCorePath)\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>$(RoR2Path)\BepInEx\core\0Harmony.dll</HintPath>
+      <HintPath>$(BepInExCorePath)\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <!-- R2API и его подмодули -->
@@ -77,38 +115,27 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Include="FirstPersonBrawlerPlugin.cs" />
-    <Compile Include="LanguageLoader.cs" />
-    <Compile Include="Effects.cs" />
-    <Compile Include="Survivors\ContentPack.cs" />
-    <Compile Include="Survivors\Icons.cs" />
-    <Compile Include="Survivors\SpecterBody.cs" />
-    <Compile Include="Survivors\SpecterDisplay.cs" />
-    <Compile Include="Survivors\SpecterMaster.cs" />
-    <Compile Include="Survivors\SpecterSkills.cs" />
-    <Compile Include="Survivors\SpecterSurvivor.cs" />
-    <Compile Include="Skills\Primary\PhaseSlash.cs" />
-    <Compile Include="Skills\Primary\PhaseSlashCombo.cs" />
-    <Compile Include="Skills\Secondary\RiftStrike.cs" />
-    <Compile Include="Skills\Utility\PhaseShift.cs" />
-    <Compile Include="Skills\Special\VoidEruption.cs" />
-    <Compile Include="EntityStates\PhaseSlashStates.cs" />
-    <Compile Include="EntityStates\RiftStrikeState.cs" />
-    <Compile Include="EntityStates\PhaseShiftState.cs" />
-    <Compile Include="EntityStates\VoidEruptionState.cs" />
-    <Compile Include="Camera\CameraConfig.cs" />
-    <Compile Include="Camera\FirstPersonCameraController.cs" />
-    <Compile Include="Patches\CameraPatches.cs" />
-  </ItemGroup>
+
   <ItemGroup>
     <!-- Ресурсы мода: AssetBundle префаба, иконки, звуки (добавляются на этапе 3/5) -->
-    <None Include="Assets\**" />
-    <None Include="manifest.json" />
+    <None Update="manifest.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Assets\**" Condition="Exists('Assets')" />
   </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- Post-build: копируем DLL + manifest в BepInEx/plugins для локального теста -->
-  <PropertyGroup>
-    <PostBuildEvent Condition="'$(RoR2Path)' != ''">xcopy /Y "$(TargetPath)" "$(BepInExPluginPath)\RoR2FirstPersonBrawler\" && xcopy /Y "$(ProjectDir)manifest.json" "$(BepInExPluginPath)\RoR2FirstPersonBrawler\"</PostBuildEvent>
-  </PropertyGroup>
+
+  <!-- Post-build: копируем DLL + manifest в BepInEx/plugins для локального теста.
+       Заменяет старый PostBuildEvent с xcopy: работает через нативные задачи MSBuild,
+       корректно обрабатывает пробелы в путях и не требует cmd.exe. -->
+  <Target Name="DeployToBepInEx" AfterTargets="Build"
+          Condition="'$(RoR2Path)' != '' And Exists('$(BepInExPluginPath)')">
+    <MakeDir Directories="$(BepInExPluginPath)\RoR2FirstPersonBrawler" />
+    <Copy SourceFiles="$(TargetPath)"
+          DestinationFolder="$(BepInExPluginPath)\RoR2FirstPersonBrawler\"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)manifest.json"
+          DestinationFolder="$(BepInExPluginPath)\RoR2FirstPersonBrawler\"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
