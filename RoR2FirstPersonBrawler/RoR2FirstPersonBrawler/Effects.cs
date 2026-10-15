@@ -20,7 +20,9 @@ namespace RoR2FirstPersonBrawler
             if (!attackerHC || !targetHC) return;
 
             // На клиенте баффы применяются репликацией HealthComponent.AddBuff.
-            if (!NetworkServer.active) return;
+            // Полное имя: отдельная сборка UnityEngine.Networking в современных билдах
+            // RoR2 отсутствует, тип NetworkServer находится в Assembly-CSharp.dll.
+            if (!UnityEngine.Networking.NetworkServer.active) return;
 
             targetHC.AddBuff(buffDef, Time.time + duration);
         }

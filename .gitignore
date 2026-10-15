@@ -4,4 +4,5 @@ obj/
 .vs/
 
 # Локальные DLL игры для автономной сборки (не коммитить — проприетарные файлы Steam)
-RoR2FirstPersonBrawler/RoR2FirstPersonBrawler/lib/
+RoR2FirstPersonBrawler/RoR2FirstPersonBrawler/lib/*.dll
+!RoR2FirstPersonBrawler/RoR2FirstPersonBrawler/lib/.gitkeep

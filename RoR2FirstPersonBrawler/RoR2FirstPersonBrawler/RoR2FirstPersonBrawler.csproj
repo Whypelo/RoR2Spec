@@ -181,6 +181,41 @@
     <HasLibMode Condition="Exists('$(LibRefPath)') And '$(HasLibMode)' == ''">true</HasLibMode>
   </PropertyGroup>
 
+  <!--
+    Проверка подлинности ключевых сборок в lib\.
+    Предыдущая версия проекта могла оставить в lib\ СИНТЕТИЧЕСКУЮ facade-сборку
+    UnityEngine.dll (создавалась целевым элементом GenerateUnityEngineFacade, когда
+    настоящего файла не было). Компилятор принимает её вместо настоящей сборки, и
+    тогда все типы цепочки наследования из Assembly-CSharp (BuffDef, HealthComponent,
+    CharacterBase...) становятся «не найдены в пространстве имён RoR2».
+    Признак подделки: файл меньше ~1 МБ (настоящий UnityEngine.dll — сотни КБ…МБ).
+    Если обнаружена facade-сборка — удаляем её и показываем ошибку с инструкцией.
+  -->
+  <Target Name="ValidateLibReferences" BeforeTargets="ResolveAssemblyReferences">
+    <PropertyGroup>
+      <!-- Порог в КБ: facade-заглушка предыдущей версии — единицы КБ; настоящие
+           UnityEngine.dll / Assembly-CSharp.dll — сотни КБ…МБ -->
+      <_FacadeSizeThresholdKb>100</_FacadeSizeThresholdKb>
+    </PropertyGroup>
+    <ItemGroup>
+      <_LibCheck Include="Assembly-CSharp.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;BepInEx.dll">
+        <Full>$(LibRefPath)\%(Identity)</Full>
+      </_LibCheck>
+      <_LibCheck Update="@(_LibCheck)"
+                 Size="$([System.IO.File]::ReadAllBytes('%(Full)').Length)"
+                 Condition="Exists('%(Full)')" />
+      <!-- Размер в КБ (деление даёт целочисленное значение; facade-заглушка ~несколько КБ) -->
+      <_LibCheck Update="@(_LibCheck)"
+                 SizeKb="$([MSBuild]::Divide('%(_LibCheck.Size)', 1024).ToString('0'))"
+                 Condition="'%(_LibCheck.Size)' != ''" />
+      <_FakeLibRefs Include="@(_LibCheck)"
+                    Condition="'%(_LibCheck.SizeKb)' != '' And $([MSBuild]::ValueOrDefault('%(_LibCheck.SizeKb)','9999').CompareTo($([MSBuild]::ParseEvalString('$(_FacadeSizeThresholdKb)')))) &lt; 0" />
+    </ItemGroup>
+    <Delete Files="%(_FakeLibRefs.Full)" Condition="'@(_FakeLibRefs)' != ''" />
+    <Error Condition="'@(_FakeLibRefs)' != ''"
+           Text="[RoR2FirstPersonBrawler] В lib\ обнаружены НЕ НАСТОЯЩИЕ (синтетические facade-) сборки: @(_FakeLibRefs->'%(Identity)', ', '). Они были сгенерированы предыдущей версией проекта и удалены при сборке. Ошибки вида «тип BuffDef/HealthComponent не найден в RoR2» вызваны именно ими. Скопируйте настоящие DLL из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ и &lt;игра&gt;\BepInEx\core\ в lib\ и пересоберите решение." />
+  </Target>
+
   <!-- Fallback: если UnityEngine.dll отсутствует и в lib\, и в папке игры
        (например, зависимости скопированы выборочно), генерируем минимальную
        facade-сборку UnityEngine, Version=0.0.0.0 с типом MonoBehaviour.
