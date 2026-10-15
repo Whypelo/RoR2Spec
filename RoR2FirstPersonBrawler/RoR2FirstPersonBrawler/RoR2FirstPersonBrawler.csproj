@@ -77,7 +77,12 @@
            RoR2 (Unity 2019.4+) классической UNet-сборки нет — типы NetworkServer/
            NetworkIdentity реплицируются в Assembly-CSharp.dll. Мод использует их
            только оттуда, отдельная ссылка не требуется. -->
-      <_GameRefSpec Include="Assembly-CSharp.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
+      <!-- UnityEngine.dll (legacy-сборка, Version=0.0.0.0) обязателен: в него
+           ссылаются типы из Assembly-CSharp (например, CharacterBase : MonoBehaviour),
+           и без него компилятор выдаёт «Тип "MonoBehaviour" определен в сборке, на
+           которую нет ссылки». Если в Managed\ его нет — включите режим lib\ и
+           положите UnityEngine.dll рядом (см. README). -->
+      <_GameRefSpec Include="Assembly-CSharp.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(LibRefPath)\%(Identity)')" Condition="Exists('$(LibRefPath)\%(_GameRefSpec.Identity)')" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(RoR2ManagedPath)\%(Identity)')" Condition="Exists('$(RoR2ManagedPath)\%(_GameRefSpec.Identity)')" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(BepInExCorePath)\%(Identity)')" Condition="Exists('$(BepInExCorePath)\%(_GameRefSpec.Identity)')" />
@@ -161,7 +166,43 @@
          Microsoft.NETFramework.ReferenceAssemblies — ставить что-либо руками не нужно) -->
     <Reference Include="System" />
     <Reference Include="System.Core" />
+
+    <!-- UnityEngine.dll (legacy-сборка, Version=0.0.0.0, Culture=neutral).
+         Обязателен даже когда подключены UnityEngine.*Module: классы из
+         Assembly-CSharp.dll (CharacterBase и др.) наследуют MonoBehaviour именно
+         из UnityEngine.dll, поэтому без этой ссылки компилятор выдаёт ошибку
+         «Тип "MonoBehaviour" определен в сборке, на которую нет ссылки».
+         В режиме B ссылка добавляется ниже; в режиме A (есть DLL в lib\) —
+         через glob lib\*.dll, отдельная запись здесь не нужна. -->
   </ItemGroup>
+
+  <PropertyGroup>
+    <!-- Режим A активен, если в lib\ есть хотя бы одна DLL -->
+    <HasLibMode Condition="Exists('$(LibRefPath)') And '$(HasLibMode)' == ''">true</HasLibMode>
+  </PropertyGroup>
+
+  <!-- Fallback: если UnityEngine.dll отсутствует и в lib\, и в папке игры
+       (например, зависимости скопированы выборочно), генерируем минимальную
+       facade-сборку UnityEngine, Version=0.0.0.0 с типом MonoBehaviour.
+       Этого достаточно, чтобы компилятор разрешил цепочку наследования из
+       Assembly-CSharp; в рантайме BepInEx/Mono подставит настоящую сборку. -->
+  <Target Name="GenerateUnityEngineFacade" BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('$(LibRefPath)\UnityEngine.dll') And !Exists('$(RoR2ManagedPath)\UnityEngine.dll')">
+    <MakeDir Directories="$(LibRefPath)" />
+    <PropertyGroup>
+      <_FacadeSrc>$(IntermediateOutputPath)UnityEngineFacade.cs</_FacadeSrc>
+      <_FacadeDll>$(LibRefPath)\UnityEngine.dll</_FacadeDll>
+      <_CscToolPath Condition="'$(CscToolPath)' == ''">$(MSBuildToolsPath)</_CscToolPath>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_FacadeSrc)" Overwrite="true"
+      Lines="using System;%0Anamespace UnityEngine {%0A    public class Object {}%0A    public class Component : Object {}%0A    public class Behaviour : Component {}%0A    public class MonoBehaviour : Behaviour {}%0A}" />
+    <Exec Command='"$(_CscToolPath)\csc.exe" /nologo /target:library /out:"$(_FacadeDll)" "$(_FacadeSrc)"'
+          IgnoreExitCode="true" ContinueOnError="true" />
+    <Message Importance="high" Condition="Exists('$(_FacadeDll)')"
+             Text="[RoR2FirstPersonBrawler] UnityEngine.dll не найден — создана временная facade-сборка в lib\ (только для компиляции). Для корректной работы положите настоящий UnityEngine.dll из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ в lib\." />
+    <Warning Condition="!Exists('$(_FacadeDll)')"
+             Text="[RoR2FirstPersonBrawler] Не удалось создать facade UnityEngine.dll (нет csc.exe по пути $(_CscToolPath)). Скопируйте UnityEngine.dll из Managed\ игры в lib\ вручную." />
+  </Target>
 
   <!-- Режим A: всё, что лежит в lib\, становится ссылками автоматически -->
   <ItemGroup Condition="Exists('$(LibRefPath)')">
@@ -174,6 +215,11 @@
     <!-- BepInEx / Harmony -->
     <Reference Include="BepInEx" Condition="!Exists('$(LibRefPath)\BepInEx.dll')">
       <HintPath>$(BepInExCorePath)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Legacy UnityEngine.dll (режим B): см. пояснение выше -->
+    <Reference Include="UnityEngine" Condition="'$(HasLibMode)' != 'true' And !Exists('$(LibRefPath)\UnityEngine.dll')">
+      <HintPath>$(RoR2ManagedPath)\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony" Condition="!Exists('$(LibRefPath)\0Harmony.dll')">
