@@ -11,7 +11,7 @@
 
     2. Warning MSB3268 «не удалось разрешить ссылку Assembly-CSharp/R2API из-за
        netstandard» + массовые CS0246 — dotnet SDK проверяет ссылки на принадлежность
-       к «платформенным сборкам» и отбрасывает целые группы типов при net35.
+       к «платформенным сборкам» и отбрасывает целые группы типов при net48.
        Отключаем эту проверку: ResolveAssemblyReferencesIgnoreDefaultAptPaths /
        DisableTransitiveFrameworkReferenceDownloads + игнорирование Apt-политики.
 
@@ -20,10 +20,10 @@
   -->
   <PropertyGroup>
     <UseSharedCompilation>false</UseSharedCompilation>
-    <!-- Не применять «platform apt»-фильтрацию ссылок (источник MSB3268 при net35) -->
+    <!-- Не применять «platform apt»-фильтрацию ссылок (источник MSB3268 при net48) -->
     <ResolveAssemblyReferencesIgnoreDefaultAptPaths>true</ResolveAssemblyReferencesIgnoreDefaultAptPaths>
     <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
-    <!-- Компилятор выбирает сам MSBuild (Roslyn из VS поддерживает net35);
+    <!-- Компилятор выбирает сам MSBuild (Roslyn из VS поддерживает net48);
          никаких ручных CscToolPath! -->
   </PropertyGroup>
 </Project>

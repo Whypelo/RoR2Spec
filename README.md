@@ -3,9 +3,9 @@ RoR2 Specter Mod Spec
 
 ## Сборка (Visual Studio 2026 Insiders)
 
-Проект адаптирован под VS2026: используется SDK-style `.csproj` (TargetFramework `net35`, LangVersion `12`).
+Проект адаптирован под VS2026: используется SDK-style `.csproj` (TargetFramework `net48`, LangVersion `12`).
 
-1. Установите в VS2026 workload **.NET desktop development** (legacy-компонент «.NET Framework 3.5 targeting pack» больше не требуется — net35-референсы берутся из reference-асsemblies NuGet-пакета `Microsoft.NETFramework.ReferenceAssemblies.net35` при restore, либо можно указать свой путь через `RoR2_PATH`).
+1. Установите в VS2026 workload **.NET desktop development** (.NET Framework 4.8 targeting pack; reference-асsemblies также подтягиваются NuGet-пакетом `Microsoft.NETFramework.ReferenceAssemblies` при restore, ставить что-либо вручную не нужно).
 2. Задайте путь к игре одним из способов:
    - переменная окружения `RoR2_PATH` (например, `C:\Program Files (x86)\Steam\steamapps\common\Risk of Rain 2`);
    - или файл `RoR2FirstPersonBrawler/RoR2FirstPersonBrawler/RoR2FirstPersonBrawler.csproj.user` (не отслеживается git):
@@ -154,12 +154,12 @@ if (Test-Path "$game\BepInEx\plugins\R2API.dll") { Copy-Item "$game\BepInEx\plug
 RoR2/UnityEngine/BepInEx. В логе сборки видны строки вида
 `C:\Program Files\dotnet\sdk\...\Microsoft.NET.RuntimeIdentifierInference.targets` —
 это значит, что проект собирается **Roslyn-компилятором из dotnet SDK**, который не
-поддерживает целевой фреймворк net35 и не умеет разрешать ссылки на сборки игры,
+поддерживает целевой фреймворк net48 и не умеет разрешать ссылки на сборки игры,
 косвенно зависящие от netstandard. Что сделано в проекте:
 1. В корне репозитория добавлен `Directory.Build.props`: отключает Roslyn-компилятор
    SDK (`UsingMicrosoftNETSdkRoslynCompilers=false`) и указывает нативный
    `csc.exe` из .NET Framework (`%WINDIR%\Microsoft.NET\Framework\v4.0.30319`) —
-   единственный компилятор, корректно работающий с net35.
+   единственный компилятор, корректно работающий со старыми TFM.
 2. Фикс у вас: `git pull` → закройте VS → удалите `bin\`, `obj\`, `.vs\` → откройте sln →
    Rebuild. Предупреждение MSB3277 (конфликт версий косвенных зависимостей) подавлено —
    оно безвредно: во время рантайма все сборки подгружает BepInEx/Mono.
@@ -168,7 +168,7 @@ RoR2/UnityEngine/BepInEx. В логе сборки видны строки ви�
 | Было (VS2022, legacy) | Стало (VS2026) |
 |---|---|
 | Legacy `.csproj` с явным списком `<Compile>` | SDK-style `.csproj`, файлы включаются автоматически |
-| `TargetFrameworkVersion v4.7.2` + `LangVersion 7.3` | `TargetFramework net35` (требование Mono-рантайма RoR2) + `LangVersion 12` |
+| `TargetFrameworkVersion v4.7.2` + `LangVersion 7.3` | `TargetFramework net48` (.NET Framework 4.8) + `LangVersion 12` |
 | `PostBuildEvent` с `xcopy` (ломал сборку без заданного пути) | MSBuild-target `DeployToBepInEx` с условием `Exists(...)` |
 | Импорт `Microsoft.Common.props` / `Microsoft.CSharp.targets` | Не нужен в SDK-проектах |
 | Решение помечено `Visual Studio Version 17` | Пересохранено под `Visual Studio Version 18` (VS2026) |

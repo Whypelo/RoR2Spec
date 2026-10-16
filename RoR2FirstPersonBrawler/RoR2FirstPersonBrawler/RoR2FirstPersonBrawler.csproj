@@ -5,10 +5,13 @@
     Изменения относительно версии под VS2022:
       * SDK-style csproj вместо legacy-формата (ToolsVersion/явный список <Compile>) —
         стандарт для MSBuild из VS2026 и dotnet CLI; все .cs подхватываются автоматически.
-      * TargetFramework net35 сохранён — это требование Mono-рантайма Risk of Rain 2,
-        а не версии Visual Studio.
+      * TargetFramework net48 (.NET Framework 4.8) — по запросу пользователя вместо
+        net35. RoR2 работает на Mono с API-уровнем .NET 4.x, поэтому сборка плагина
+        под net48 совместима с игрой во время выполнения; при этом исчезают ошибки
+        MSB3268/MSB3258 («зависимости от mscorlib 4.0 / netstandard» невозможны для
+        целевой платформы 4.8). В рантайме игра всё равно использует свой Mono.
       * LangVersion 12 — новый компилятор Roslyn из VS2026 позволяет использовать
-        современный синтаксис C# поверх net35 (для старых файлов достаточно 7.3+,
+        современный синтаксис C# (для старых файлов достаточно 7.3+,
         повышение безопасно: обратно совместимо).
       * Post-build копирование через целевые элементы MSBuild вместо cmd-обёртки xcopy —
         кроссплатформенно (работает и в VS Insiders на Windows Arm64 / в CodeSpaces),
@@ -17,7 +20,7 @@
   -->
 
   <PropertyGroup>
-    <TargetFramework>net35</TargetFramework>
+    <TargetFramework>net48</TargetFramework>
     <OutputType>Library</OutputType>
     <RootNamespace>RoR2FirstPersonBrawler</RootNamespace>
     <AssemblyName>RoR2FirstPersonBrawler</AssemblyName>
@@ -29,18 +32,18 @@
          чтобы атрибуты сборки остались под нашим контролем (при необходимости). -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <!-- Не тянуть случайные NuGet-зависимости: все игровые референсы — локальные DLL.
-         Единственный пакет — reference assemblies для net35 (аналог targeting pack из
+         Единственный пакет — reference assemblies для net48 (аналог targeting pack из
          VS Installer; в VS2026 отдельный компонент ставить не нужно). -->
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
     <!-- RoR2/BepInEx — x86-сборки (MSIL без 32BITREQUIRED), поэтому сам плагин
-         тоже компилируется как x86 (AnyCPU+Prefer32Bit в net35 не поддерживается).
+         тоже компилируется как x86.
          Это убирает предупреждение MSB3270 «несоответствие архитектур MSIL/x86». -->
     <PlatformTarget>x86</PlatformTarget>
     <AssemblyOriginatorKeyFile></AssemblyOriginatorKeyFile>
     <!-- КРИТИЧНО для VS2026/dotnet SDK: НЕ отключаем SDK-Roslyn и НЕ подменяем
          компилятор нативным csc.exe v4.0 — это вызывало fatal CS2007
          «Нераспознанный параметр /sdkpath:». Roslyn из VS полностью поддерживает
-         целевой фреймворк net35. Настройки обхода MSB3268 — в Directory.Build.props. -->
+         целевой фреймворк net48. Настройки обхода MSB3268 — в Directory.Build.props. -->
     <DisableTransitiveFrameworkReferenceDownloads>true</DisableTransitiveFrameworkReferenceDownloads>
   </PropertyGroup>
 
@@ -57,7 +60,7 @@
     <!-- Обход MSB3268/CS2007 настроен в Directory.Build.props в корне репозитория
          (отключение apt-фильтрации ссылок + отказ от shared compilation;
          компилятор выбирает сам MSBuild — без ручного CscToolPath). -->
-    <!-- Критично для SDK-style проекта net35: без отключенияimplicit-ссылок на
+    <!-- Критично для SDK-style проекта .NET Framework: без отключения implicit-ссылок на
          Microsoft.NETCore.App проект пытается разрешить System.* из .NET Core
          и сборка/IntelliSense падают ещё до компиляции игровых ссылок. -->
     <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
@@ -184,7 +187,7 @@
     подключение зависимостей»).
   -->
   <ItemGroup>
-    <!-- Системные сборки net35 (берутся из targeting pack NuGet-пакета
+    <!-- Системные сборки net48 (берутся из targeting pack NuGet-пакета
          Microsoft.NETFramework.ReferenceAssemblies — ставить что-либо руками не нужно) -->
     <Reference Include="System" />
     <Reference Include="System.Core" />
