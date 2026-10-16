@@ -275,38 +275,47 @@
       <Reference Include="BepInEx" Condition="!Exists('$(LibRefPath)\BepInEx.dll')">
         <HintPath>$(BepInExCorePath)\BepInEx.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="UnityEngine" Condition="!Exists('$(LibRefPath)\UnityEngine.dll')">
         <HintPath>$(RoR2ManagedPath)\UnityEngine.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="0Harmony" Condition="!Exists('$(LibRefPath)\0Harmony.dll')">
         <HintPath>$(BepInExCorePath)\0Harmony.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="R2API" Condition="!Exists('$(LibRefPath)\R2API.dll')">
         <HintPath>$(BepInExPluginPath)\R2API.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="Assembly-CSharp" Condition="!Exists('$(LibRefPath)\Assembly-CSharp.dll')">
         <HintPath>$(RoR2ManagedPath)\Assembly-CSharp.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="UnityEngine.CoreModule" Condition="!Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
         <HintPath>$(RoR2ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="UnityEngine.AnimationModule" Condition="!Exists('$(LibRefPath)\UnityEngine.AnimationModule.dll')">
         <HintPath>$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="UnityEngine.PhysicsModule" Condition="!Exists('$(LibRefPath)\UnityEngine.PhysicsModule.dll')">
         <HintPath>$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="UnityEngine.AssetBundleModule" Condition="!Exists('$(LibRefPath)\UnityEngine.AssetBundleModule.dll')">
         <HintPath>$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll</HintPath>
         <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
       </Reference>
     </ItemGroup>
     <Message Importance="high" Text="[RoR2FirstPersonBrawler] Managed-путь для ссылок: $(RoR2ManagedPath)" />
@@ -363,44 +372,61 @@
   </Target>
 
   <ItemGroup>
+    <!-- КРИТИЧНО: все ссылки режима A (lib\) помечаются FairAssemblies='true'.
+         Иначе RAR применяет к ним политику «платформенных» сборок и молча
+         ОТБРАСЫВАЕТ Assembly-CSharp.dll / UnityEngine.* целиком: в логе это
+         выглядит как MSB3258/MSB3268 («косвенно зависит от mscorlib 4.0.0.0»),
+         а компилятор выдаёт CS1069/CS0246 («тип CharacterBody не найден в RoR2,
+         этот тип был отправлен в сборку RoR2…») даже при физически присутствующих
+         DLL. Сборки Mono имеют версии 0.0.0.0/4.x, которые RAR считает «новее
+         целевой платформы» — для игровых DLL эта проверка бессмысленна. -->
     <!-- Не глоб lib\*.dll: лишние/старые сборки (например, UnityEngine.Networking.dll
          из старых версий игры) вызывали конфликты. Список фиксированный; при сборке
          проверяется существование каждого файла, недостающие — понятная ошибка. -->
     <Reference Include="Assembly-CSharp" Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll')">
       <HintPath>$(LibRefPath)\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine" Condition="Exists('$(LibRefPath)\UnityEngine.dll')">
       <HintPath>$(LibRefPath)\UnityEngine.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine.CoreModule" Condition="Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
       <HintPath>$(LibRefPath)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine.AnimationModule" Condition="Exists('$(LibRefPath)\UnityEngine.AnimationModule.dll')">
       <HintPath>$(LibRefPath)\UnityEngine.AnimationModule.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule" Condition="Exists('$(LibRefPath)\UnityEngine.PhysicsModule.dll')">
       <HintPath>$(LibRefPath)\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine.AssetBundleModule" Condition="Exists('$(LibRefPath)\UnityEngine.AssetBundleModule.dll')">
       <HintPath>$(LibRefPath)\UnityEngine.AssetBundleModule.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="BepInEx" Condition="Exists('$(LibRefPath)\BepInEx.dll')">
       <HintPath>$(LibRefPath)\BepInEx.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="0Harmony" Condition="Exists('$(LibRefPath)\0Harmony.dll')">
       <HintPath>$(LibRefPath)\0Harmony.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="R2API" Condition="Exists('$(LibRefPath)\R2API.dll')">
       <HintPath>$(LibRefPath)\R2API.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
   </ItemGroup>
 
@@ -424,41 +450,50 @@
     <Reference Include="BepInEx" Condition="!Exists('$(LibRefPath)\BepInEx.dll')">
       <HintPath>$(BepInExCorePath)\BepInEx.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <!-- Legacy UnityEngine.dll (режим B): см. пояснение выше -->
     <Reference Include="UnityEngine" Condition="!Exists('$(LibRefPath)\UnityEngine.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="0Harmony" Condition="!Exists('$(LibRefPath)\0Harmony.dll')">
       <HintPath>$(BepInExCorePath)\0Harmony.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <!-- R2API -->
     <Reference Include="R2API" Condition="!Exists('$(LibRefPath)\R2API.dll')">
       <HintPath>$(BepInExPluginPath)\R2API.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <!-- Игровые сборки -->
     <Reference Include="Assembly-CSharp" Condition="!Exists('$(LibRefPath)\Assembly-CSharp.dll')">
       <HintPath>$(RoR2ManagedPath)\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine.CoreModule" Condition="!Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine.AnimationModule" Condition="!Exists('$(LibRefPath)\UnityEngine.AnimationModule.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine.PhysicsModule" Condition="!Exists('$(LibRefPath)\UnityEngine.PhysicsModule.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <Reference Include="UnityEngine.AssetBundleModule" Condition="!Exists('$(LibRefPath)\UnityEngine.AssetBundleModule.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll</HintPath>
       <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
     </Reference>
     <!-- Ссылка UnityEngine.Networking НЕ добавляется: в текущих билдах RoR2
          (Unity 2019.4 LTS+) отдельной UNet-сборки в Managed\ нет, типы
