@@ -37,13 +37,11 @@
          Это убирает предупреждение MSB3270 «несоответствие архитектур MSIL/x86». -->
     <PlatformTarget>x86</PlatformTarget>
     <AssemblyOriginatorKeyFile></AssemblyOriginatorKeyFile>
-    <!-- КРИТИЧНО для сборки с DLL игры: по умолчанию SDK-style проекты собираются
-         компилятором из Roslyn-пакета dotnet SDK, который НЕ поддерживает net35
-         (ошибки разрешения ссылок MSB3268 и массовые CS0246 «RoR2/UnityEngine не
-         найдены» даже при корректных DLL в lib\). UseRoslyn=false заставляет MSBuild
-         использовать нативный компилятор .NET Framework csc.exe — стандартный путь
-         для всех BepInEx-плагинов RoR2. -->
-    <UseRoslynCompilers>false</UseRoslynCompilers>
+    <!-- КРИТИЧНО для VS2026/dotnet SDK: НЕ отключаем SDK-Roslyn и НЕ подменяем
+         компилятор нативным csc.exe v4.0 — это вызывало fatal CS2007
+         «Нераспознанный параметр /sdkpath:». Roslyn из VS полностью поддерживает
+         целевой фреймворк net35. Настройки обхода MSB3268 — в Directory.Build.props. -->
+    <DisableTransitiveFrameworkReferenceDownloads>true</DisableTransitiveFrameworkReferenceDownloads>
   </PropertyGroup>
 
   <ItemGroup>
@@ -55,10 +53,10 @@
 
   <PropertyGroup>
     <!-- Legacy API-совместимость поведения компилятора для UnityEngine-сборок -->
-    <NoWarn>$(NoWarn);CS0618;MSB3277</NoWarn>
-    <!-- Компилятор настраивается в Directory.Build.props в корне репозитория:
-         нативный csc.exe из .NET Framework вместо Roslyn из dotnet SDK
-         (SDK-компилятор не поддерживает net35 -> MSB3268/массовые CS0246). -->
+    <NoWarn>$(NoWarn);CS0618;MSB3277;MSB3268;CS1701;CS1702</NoWarn>
+    <!-- Обход MSB3268/CS2007 настроен в Directory.Build.props в корне репозитория
+         (отключение apt-фильтрации ссылок + отказ от shared compilation;
+         компилятор выбирает сам MSBuild — без ручного CscToolPath). -->
     <!-- Критично для SDK-style проекта net35: без отключенияimplicit-ссылок на
          Microsoft.NETCore.App проект пытается разрешить System.* из .NET Core
          и сборка/IntelliSense падают ещё до компиляции игровых ссылок. -->

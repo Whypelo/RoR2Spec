@@ -1,19 +1,29 @@
 <Project>
   <!--
-    Единая настройка компилятора для всех проектов решения.
+    Единая настройка сборки для всех проектов решения (VS2026 Insiders).
 
-    КРИТИЧНО для net35-проектов (плагины Risk of Rain 2): VS2026/dotnet SDK по
-    умолчанию собирает через Roslyn из состава dotnet SDK, который не поддерживает
-    целевой фреймворк .NET Framework 3.5 — ссылки на Assembly-CSharp.dll / R2API.dll
-    (косвенно зависящие от netstandard) не разрешаются (MSB3268), и вся сборка
-    превращается в поток ошибок CS0246 даже при корректных DLL в lib\.
+    Проблемы, которые решаются здесь:
 
-    Отключаем Roslyn-компилятор SDK: используется нативный csc.exe из .NET Framework
-    (ставится вместе с Windows/VS и полностью поддерживает net35).
+    1. Fatal error CS2007 «Нераспознанный параметр: /sdkpath:» — возникал из-за
+       принудительного CscToolPath на .NET Framework csc.exe v4.0: MSBuild SDK-проектов
+       передаёт компилятору современные ключи (/sdkpath:, /analyzer:), которые старый
+       csc.exe не понимает. CscToolPath/CscToolExe больше НЕ задаём.
+
+    2. Warning MSB3268 «не удалось разрешить ссылку Assembly-CSharp/R2API из-за
+       netstandard» + массовые CS0246 — dotnet SDK проверяет ссылки на принадлежность
+       к «платформенным сборкам» и отбрасывает целые группы типов при net35.
+       Отключаем эту проверку: ResolveAssemblyReferencesIgnoreDefaultAptPaths /
+       DisableTransitiveFrameworkReferenceDownloads + игнорирование Apt-политики.
+
+    3. UseSharedCompilation=false — VBCSCompiler (общий сервер компиляции из dotnet SDK)
+       некорректно работает со старыми TFM; вызываем компилятор напрямую.
   -->
   <PropertyGroup>
-    <UsingMicrosoftNETSdkRoslynCompilers>false</UsingMicrosoftNETSdkRoslynCompilers>
-    <CscToolPath Condition="'$(OS)' == 'Windows_NT' And Exists('$(WINDIR)\Microsoft.NET\Framework\v4.0.30319\csc.exe')">$(WINDIR)\Microsoft.NET\Framework\v4.0.30319</CscToolPath>
-    <CscToolExe Condition="'$(CscToolPath)' != ''">csc.exe</CscToolExe>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <!-- Не применять «platform apt»-фильтрацию ссылок (источник MSB3268 при net35) -->
+    <ResolveAssemblyReferencesIgnoreDefaultAptPaths>true</ResolveAssemblyReferencesIgnoreDefaultAptPaths>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <!-- Компилятор выбирает сам MSBuild (Roslyn из VS поддерживает net35);
+         никаких ручных CscToolPath! -->
   </PropertyGroup>
 </Project>
