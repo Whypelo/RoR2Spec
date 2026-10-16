@@ -93,7 +93,7 @@
            и без него компилятор выдаёт «Тип "MonoBehaviour" определен в сборке, на
            которую нет ссылки». Если в Managed\ его нет — включите режим lib\ и
            положите UnityEngine.dll рядом (см. README). -->
-      <_GameRefSpec Include="Assembly-CSharp.dll;RoR2.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
+      <_GameRefSpec Include="Assembly-CSharp.dll;RoR2.dll;com.unity.multiplayer-hlapi.Runtime.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(LibRefPath)\%(Identity)')" Condition="Exists('$(LibRefPath)\%(_GameRefSpec.Identity)')" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(RoR2ManagedPath)\%(Identity)')" Condition="Exists('$(RoR2ManagedPath)\%(_GameRefSpec.Identity)')" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(BepInExCorePath)\%(Identity)')" Condition="Exists('$(BepInExCorePath)\%(_GameRefSpec.Identity)')" />
@@ -230,7 +230,7 @@
          Test-Path после Remove-Item). Это важно: при инкрементальной сборке target
          выполняется повторно, файлы уже настоящие — и ложный список "PURGED" не
          формируется. -->
-    <Exec Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;$t=[int64]500000; Get-ChildItem -LiteralPath '$(LibRefPath)' -Filter *.dll | Where-Object { $_.Length -lt $t } | ForEach-Object { $f=$_.FullName; $n=$_.Name; $l=$_.Length; Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue; if(-not (Test-Path -LiteralPath $f)){ Write-Output ($n + '=' + $l) } }&quot;"
+    <Exec Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;$t=[int64]500000; Get-ChildItem -LiteralPath '$(LibRefPath)' -Filter *.dll | Where-Object { $_.Length -lt $t -and $_.Name -ne 'com.unity.multiplayer-hlapi.Runtime.dll' } | ForEach-Object { $f=$_.FullName; $n=$_.Name; $l=$_.Length; Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue; if(-not (Test-Path -LiteralPath $f)){ Write-Output ($n + '=' + $l) } }&quot;"
           IgnoreExitCode="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_PurgedLibLines" />
     </Exec>
@@ -325,6 +325,16 @@
         <Private>false</Private>
       <FairAssemblies>true</FairAssemblies>
       </Reference>
+      <!-- com.unity.multiplayer-hlapi.Runtime.dll: сборка Unity Multiplayer (HLAPI),
+           в ней определён базовый тип NetworkBehaviour, от которого наследуются
+           CharacterBody/CharacterMaster и др. Без ссылки на неё компилятор выдаёт
+           CS0012 («Тип "NetworkBehaviour" определен в сборке, на которую нет ссылки»).
+           Файл лежит в Managed\; добавляется только если реально существует. -->
+      <Reference Include="com.unity.multiplayer-hlapi.Runtime" Condition="'$(LibRefPath)' != '' And !Exists('$(LibRefPath)\com.unity.multiplayer-hlapi.Runtime.dll') And Exists('$(RoR2ManagedPath)\com.unity.multiplayer-hlapi.Runtime.dll')">
+        <HintPath>$(RoR2ManagedPath)\com.unity.multiplayer-hlapi.Runtime.dll</HintPath>
+        <Private>false</Private>
+        <FairAssemblies>true</FairAssemblies>
+      </Reference>
     </ItemGroup>
     <Message Importance="high" Text="[RoR2FirstPersonBrawler] Managed-путь для ссылок: $(RoR2ManagedPath)" />
   </Target>
@@ -400,6 +410,15 @@
          игры). Если лежит в lib\ — используется она; иначе (см. ниже) — из Managed\. -->
     <Reference Include="RoR2" Condition="Exists('$(LibRefPath)\RoR2.dll')">
       <HintPath>$(LibRefPath)\RoR2.dll</HintPath>
+      <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
+    </Reference>
+    <!-- com.unity.multiplayer-hlapi.Runtime.dll: базовый тип NetworkBehaviour
+         (наследуют CharacterBody/CharacterMaster). Без ссылки — CS0012.
+         Если лежит в lib\ — берётся оттуда; иначе (см. target RecomputeGamePaths)
+         из Managed\ по пути к игре. -->
+    <Reference Include="com.unity.multiplayer-hlapi.Runtime" Condition="Exists('$(LibRefPath)\com.unity.multiplayer-hlapi.Runtime.dll')">
+      <HintPath>$(LibRefPath)\com.unity.multiplayer-hlapi.Runtime.dll</HintPath>
       <Private>false</Private>
       <FairAssemblies>true</FairAssemblies>
     </Reference>

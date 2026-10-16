@@ -31,6 +31,7 @@ RoR2 Specter Mod Spec
 |---|---|
 | `Assembly-CSharp.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
 | `RoR2.dll` (если есть в вашей версии игры) | `<игра>\Risk of Rain 2_Data\Managed\` — отдельная сборка с типами namespace RoR2; проект подключает её автоматически, когда файл существует |
+| `com.unity.multiplayer-hlapi.Runtime.dll` | `<игра>\Risk of Rain 2_Data\Managed\` — в ней определён базовый тип `NetworkBehaviour`; без неё ошибка CS0012 «Тип "NetworkBehaviour" определен в сборке, на которую нет ссылки». Файл небольшой (~300 КБ) — это нормально, он исключён из автоматической очистки `lib\` |
 | `UnityEngine.dll` | `<игра>\Risk of Rain 2_Data\Managed\` — legacy-сборка, в ней определён MonoBehaviour; без неё ошибка «Тип "MonoBehaviour" определен в сборке, на которую нет ссылки» |
 | `UnityEngine.CoreModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
 | `UnityEngine.AnimationModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
@@ -55,6 +56,8 @@ Copy-Item "$game\Risk of Rain 2_Data\Managed\Assembly-CSharp.dll" $lib
 # Без него будет ошибка «Тип "MonoBehaviour" определен в сборке, на которую нет ссылки».
 Copy-Item "$game\Risk of Rain 2_Data\Managed\UnityEngine.dll" $lib
 Copy-Item "$game\Risk of Rain 2_Data\Managed\UnityEngine.*Module.dll" $lib
+# HLAPI-сборка с NetworkBehaviour (базовый класс CharacterBody/CharacterMaster):
+if (Test-Path "$game\Risk of Rain 2_Data\Managed\com.unity.multiplayer-hlapi.Runtime.dll") { Copy-Item "$game\Risk of Rain 2_Data\Managed\com.unity.multiplayer-hlapi.Runtime.dll" $lib }
 Copy-Item "$game\BepInEx\core\BepInEx.dll","$game\BepInEx\core\0Harmony.dll" $lib
 if (Test-Path "$game\BepInEx\plugins\R2API.dll") { Copy-Item "$game\BepInEx\plugins\R2API.dll" $lib }
 ```
