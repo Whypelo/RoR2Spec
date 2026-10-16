@@ -225,6 +225,19 @@
     <Reference Include="$(LibRefPath)\*.dll" />
   </ItemGroup>
 
+  <!--
+    КРИТИЧНО для режима A: UnityEngine.CoreModule.dll (и прочие *Module) должны быть
+    в lib\ ОБЯЗАТЕЛЬНО. В Mono-сборках RoR2 типы Component/MonoBehaviour/GameObject
+    объявлены именно в CoreModule, а legacy UnityEngine.dll содержит только type-forwards.
+    Если CoreModule отсутствует, компилятор берёт базовые классы из mscorlib-подобных
+    заглушек и считает все типы Assembly-CSharp (BuffDef, HealthComponent, NetworkServer...)
+    «не найденными в RoR2», хотя Assembly-CSharp.dll подключена.
+  -->
+  <Target Name="RequireCoreModuleInLib" BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(HasLibMode)' == 'true' And !Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
+    <Error Text="[RoR2FirstPersonBrawler] В lib\ есть DLL, но ОТСУТСТВУЕТ UnityEngine.CoreModule.dll. Без неё ошибки «тип BuffDef/HealthComponent не найден в RoR2» неизбежны: базовые классы Component/MonoBehaviour живут именно в этой сборке. Скопируйте UnityEngine.CoreModule.dll из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ в lib\ и пересоберите." />
+  </Target>
+
   <!-- Режим B: те же сборки по путям игры — добавляются только если их НЕТ в lib\,
        иначе будет конфликт дубликатах ссылок (MSB3271/CS1701) -->
   <ItemGroup>

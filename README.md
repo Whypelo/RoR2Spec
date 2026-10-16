@@ -107,6 +107,17 @@ if (Test-Path "$game\BepInEx\plugins\R2API.dll") { Copy-Item "$game\BepInEx\plug
    Проверьте, что `Assembly-CSharp.dll` в `lib\` настоящий (размер — несколько МБ) и не
    заблокирован Windows (ПКМ → Свойства → «Разблокировать»).
 
+**Вторая частая причина тех же ошибок: в `lib\` НЕТ `UnityEngine.CoreModule.dll`.**
+Даже если там лежат настоящие `Assembly-CSharp.dll` и `UnityEngine.dll`, без CoreModule
+ошибки «BuffDef/HealthComponent не найден в RoR2» останутся: в Mono-сборках Unity базовые
+классы `Component`/`MonoBehaviour`/`GameObject` объявлены именно в
+`UnityEngine.CoreModule.dll`, а legacy `UnityEngine.dll` содержит только перенаправления
+(type-forwards) на неё. Без CoreModule компилятор не может связать классы Assembly-CSharp
+с их базовыми типами и отбраковывает все ссылки на них. Поэтому в `lib\` обязательны
+**все** модули Unity из скрипта выше (`UnityEngine.*Module.dll`) — скопируйте их целиком.
+Проект теперь проверяет это явно: target `RequireCoreModuleInLib` останавливает сборку с
+понятным текстом ошибки, если в `lib\` есть DLL, но отсутствует `UnityEngine.CoreModule.dll`.
+
 ### Что изменилось при переносе с VS2022
 | Было (VS2022, legacy) | Стало (VS2026) |
 |---|---|
