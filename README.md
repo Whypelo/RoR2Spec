@@ -30,6 +30,7 @@ RoR2 Specter Mod Spec
 | Файл | Откуда взять |
 |---|---|
 | `Assembly-CSharp.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
+| `RoR2.dll` (если есть в вашей версии игры) | `<игра>\Risk of Rain 2_Data\Managed\` — отдельная сборка с типами namespace RoR2; проект подключает её автоматически, когда файл существует |
 | `UnityEngine.dll` | `<игра>\Risk of Rain 2_Data\Managed\` — legacy-сборка, в ней определён MonoBehaviour; без неё ошибка «Тип "MonoBehaviour" определен в сборке, на которую нет ссылки» |
 | `UnityEngine.CoreModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |
 | `UnityEngine.AnimationModule.dll` | `<игра>\Risk of Rain 2_Data\Managed\` |

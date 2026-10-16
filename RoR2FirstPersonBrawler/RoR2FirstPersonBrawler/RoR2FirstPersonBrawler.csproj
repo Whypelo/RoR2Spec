@@ -93,7 +93,7 @@
            и без него компилятор выдаёт «Тип "MonoBehaviour" определен в сборке, на
            которую нет ссылки». Если в Managed\ его нет — включите режим lib\ и
            положите UnityEngine.dll рядом (см. README). -->
-      <_GameRefSpec Include="Assembly-CSharp.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
+      <_GameRefSpec Include="Assembly-CSharp.dll;RoR2.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;UnityEngine.AnimationModule.dll;UnityEngine.PhysicsModule.dll;UnityEngine.AssetBundleModule.dll;BepInEx.dll;0Harmony.dll;R2API.dll" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(LibRefPath)\%(Identity)')" Condition="Exists('$(LibRefPath)\%(_GameRefSpec.Identity)')" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(RoR2ManagedPath)\%(Identity)')" Condition="Exists('$(RoR2ManagedPath)\%(_GameRefSpec.Identity)')" />
       <_FoundGameRefs Include="@(_GameRefSpec->'$(BepInExCorePath)\%(Identity)')" Condition="Exists('$(BepInExCorePath)\%(_GameRefSpec.Identity)')" />
@@ -271,7 +271,7 @@
            затронуло. Здесь Include-условие вычисляется уже ПОСЛЕ AutoDetectRoR2Path,
            поэтому берётся реальный путь; Remove-список снимает «дефолтные» дубликаты
            (иначе был бы MSB3105 о повторных ссылках). -->
-      <Reference Remove="Assembly-CSharp;UnityEngine;UnityEngine.CoreModule;UnityEngine.AnimationModule;UnityEngine.PhysicsModule;UnityEngine.AssetBundleModule;BepInEx;0Harmony;R2API" />
+      <Reference Remove="Assembly-CSharp;RoR2;UnityEngine;UnityEngine.CoreModule;UnityEngine.AnimationModule;UnityEngine.PhysicsModule;UnityEngine.AssetBundleModule;BepInEx;0Harmony;R2API" />
       <Reference Include="BepInEx" Condition="!Exists('$(LibRefPath)\BepInEx.dll')">
         <HintPath>$(BepInExCorePath)\BepInEx.dll</HintPath>
         <Private>false</Private>
@@ -296,6 +296,14 @@
         <HintPath>$(RoR2ManagedPath)\Assembly-CSharp.dll</HintPath>
         <Private>false</Private>
       <FairAssemblies>true</FairAssemblies>
+      </Reference>
+      <!-- RoR2.dll: в некоторых билдах игры типы пространства имён RoR2 вынесены
+           из Assembly-CSharp.dll в отдельную сборку RoR2.dll. Условие Exists(...)
+           внутри target — файл добавляется только если реально существует. -->
+      <Reference Include="RoR2" Condition="'$(LibRefPath)' != '' And !Exists('$(LibRefPath)\RoR2.dll') And Exists('$(RoR2ManagedPath)\RoR2.dll')">
+        <HintPath>$(RoR2ManagedPath)\RoR2.dll</HintPath>
+        <Private>false</Private>
+        <FairAssemblies>true</FairAssemblies>
       </Reference>
       <Reference Include="UnityEngine.CoreModule" Condition="!Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
         <HintPath>$(RoR2ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
@@ -388,6 +396,13 @@
       <Private>false</Private>
       <FairAssemblies>true</FairAssemblies>
     </Reference>
+    <!-- RoR2.dll: отдельная сборка с типами namespace RoR2 (есть не во всех билдах
+         игры). Если лежит в lib\ — используется она; иначе (см. ниже) — из Managed\. -->
+    <Reference Include="RoR2" Condition="Exists('$(LibRefPath)\RoR2.dll')">
+      <HintPath>$(LibRefPath)\RoR2.dll</HintPath>
+      <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
+    </Reference>
     <Reference Include="UnityEngine" Condition="Exists('$(LibRefPath)\UnityEngine.dll')">
       <HintPath>$(LibRefPath)\UnityEngine.dll</HintPath>
       <Private>false</Private>
@@ -472,6 +487,12 @@
     <!-- Игровые сборки -->
     <Reference Include="Assembly-CSharp" Condition="!Exists('$(LibRefPath)\Assembly-CSharp.dll')">
       <HintPath>$(RoR2ManagedPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+      <FairAssemblies>true</FairAssemblies>
+    </Reference>
+    <!-- RoR2.dll из установленной игры (если сборка есть в Managed\) -->
+    <Reference Include="RoR2" Condition="!Exists('$(LibRefPath)\RoR2.dll') And Exists('$(RoR2ManagedPath)\RoR2.dll')">
+      <HintPath>$(RoR2ManagedPath)\RoR2.dll</HintPath>
       <Private>false</Private>
       <FairAssemblies>true</FairAssemblies>
     </Reference>
