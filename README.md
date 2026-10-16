@@ -118,6 +118,23 @@ if (Test-Path "$game\BepInEx\plugins\R2API.dll") { Copy-Item "$game\BepInEx\plug
 Проект теперь проверяет это явно: target `RequireCoreModuleInLib` останавливает сборку с
 понятным текстом ошибки, если в `lib\` есть DLL, но отсутствует `UnityEngine.CoreModule.dll`.
 
+### MSB3268 «не удалось разрешить основную ссылку Assembly-CSharp.dll ... netstandard 2.1» + массовые CS0246 при корректных DLL в lib\
+
+Признак: все DLL в `lib\` настоящие (Assembly-CSharp ~много МБ, CoreModule ~1+ МБ),
+но сборка всё равно падает с предупреждениями MSB3268 и потоком CS0246 по всем типам
+RoR2/UnityEngine/BepInEx. В логе сборки видны строки вида
+`C:\Program Files\dotnet\sdk\...\Microsoft.NET.RuntimeIdentifierInference.targets` —
+это значит, что проект собирается **Roslyn-компилятором из dotnet SDK**, который не
+поддерживает целевой фреймворк net35 и не умеет разрешать ссылки на сборки игры,
+косвенно зависящие от netstandard. Что сделано в проекте:
+1. В корне репозитория добавлен `Directory.Build.props`: отключает Roslyn-компилятор
+   SDK (`UsingMicrosoftNETSdkRoslynCompilers=false`) и указывает нативный
+   `csc.exe` из .NET Framework (`%WINDIR%\Microsoft.NET\Framework\v4.0.30319`) —
+   единственный компилятор, корректно работающий с net35.
+2. Фикс у вас: `git pull` → закройте VS → удалите `bin\`, `obj\`, `.vs\` → откройте sln →
+   Rebuild. Предупреждение MSB3277 (конфликт версий косвенных зависимостей) подавлено —
+   оно безвредно: во время рантайма все сборки подгружает BepInEx/Mono.
+
 ### Что изменилось при переносе с VS2022
 | Было (VS2022, legacy) | Стало (VS2026) |
 |---|---|

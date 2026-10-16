@@ -37,6 +37,13 @@
          Это убирает предупреждение MSB3270 «несоответствие архитектур MSIL/x86». -->
     <PlatformTarget>x86</PlatformTarget>
     <AssemblyOriginatorKeyFile></AssemblyOriginatorKeyFile>
+    <!-- КРИТИЧНО для сборки с DLL игры: по умолчанию SDK-style проекты собираются
+         компилятором из Roslyn-пакета dotnet SDK, который НЕ поддерживает net35
+         (ошибки разрешения ссылок MSB3268 и массовые CS0246 «RoR2/UnityEngine не
+         найдены» даже при корректных DLL в lib\). UseRoslyn=false заставляет MSBuild
+         использовать нативный компилятор .NET Framework csc.exe — стандартный путь
+         для всех BepInEx-плагинов RoR2. -->
+    <UseRoslynCompilers>false</UseRoslynCompilers>
   </PropertyGroup>
 
   <ItemGroup>
@@ -48,7 +55,10 @@
 
   <PropertyGroup>
     <!-- Legacy API-совместимость поведения компилятора для UnityEngine-сборок -->
-    <NoWarn>$(NoWarn);CS0618</NoWarn>
+    <NoWarn>$(NoWarn);CS0618;MSB3277</NoWarn>
+    <!-- Компилятор настраивается в Directory.Build.props в корне репозитория:
+         нативный csc.exe из .NET Framework вместо Roslyn из dotnet SDK
+         (SDK-компилятор не поддерживает net35 -> MSB3268/массовые CS0246). -->
     <!-- Критично для SDK-style проекта net35: без отключенияimplicit-ссылок на
          Microsoft.NETCore.App проект пытается разрешить System.* из .NET Core
          и сборка/IntelliSense падают ещё до компиляции игровых ссылок. -->
@@ -177,11 +187,24 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <!-- Режим A активен, если в lib\ есть хотя бы одна DLL -->
     <!-- Режим A активен только если в lib\ есть хотя бы одна реальная DLL
          (папка может существовать с пустым .gitkeep — это НЕ режим A) -->
     <HasLibMode Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll') Or Exists('$(LibRefPath)\BepInEx.dll') Or Exists('$(LibRefPath)\UnityEngine.dll')">true</HasLibMode>
   </PropertyGroup>
+
+  <!--
+    КРИТИЧНО для режима A: UnityEngine.CoreModule.dll (и прочие *Module) должны быть
+    в lib\ ОБЯЗАТЕЛЬНО. В Mono-сборках RoR2 типы Component/MonoBehaviour/GameObject
+    объявлены именно в CoreModule, а legacy UnityEngine.dll содержит только type-forwards.
+    Если CoreModule отсутствует, компилятор берёт базовые классы из mscorlib-подобных
+    заглушек и считает все типы Assembly-CSharp (BuffDef, HealthComponent, NetworkServer...)
+    «не найденными в RoR2», хотя Assembly-CSharp.dll подключена.
+    Проверка выполняется ДО удаления подозрительных файлов (см. ValidateLibReferences).
+  -->
+  <Target Name="RequireCoreModuleInLib" BeforeTargets="ValidateLibReferences;ResolveAssemblyReferences"
+          Condition="'$(HasLibMode)' == 'true' And !Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
+    <Error Text="[RoR2FirstPersonBrawler] В lib\ есть DLL, но ОТСУТСТВУЕТ UnityEngine.CoreModule.dll. Без неё ошибки «тип BuffDef/HealthComponent не найден в RoR2» неизбежны: базовые классы Component/MonoBehaviour живут именно в этой сборке. Скопируйте UnityEngine.CoreModule.dll из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ в lib\ и пересоберите." />
+  </Target>
 
   <!--
     Проверка подлинности ключевых сборок в lib\.
@@ -219,23 +242,59 @@
            Text="[RoR2FirstPersonBrawler] В lib\ обнаружены НЕ НАСТОЯЩИЕ (синтетические facade-) сборки: @(_FakeLibRefs->'%(DllName)', ', '). Они были сгенерированы предыдущей версией проекта и удалены при сборке. Ошибки вида «тип BuffDef/HealthComponent не найден в RoR2» вызваны именно ими. Скопируйте настоящие DLL из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ и &lt;игра&gt;\BepInEx\core\ в lib\ и пересоберите решение." />
   </Target>
 
-  <!-- Режим A: всё, что лежит в lib\, становится ссылками автоматически.
-       Активен только при наличии реальных DLL (см. HasLibMode выше). -->
   <ItemGroup Condition="'$(HasLibMode)' == 'true'">
-    <Reference Include="$(LibRefPath)\*.dll" />
+    <!-- Не глоб lib\*.dll: лишние/старые сборки (например, UnityEngine.Networking.dll
+         из старых версий игры) вызывали конфликты. Список фиксированный; при сборке
+         проверяется существование каждого файла, недостающие — понятная ошибка. -->
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(LibRefPath)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(LibRefPath)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(LibRefPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AnimationModule" Condition="Exists('$(LibRefPath)\UnityEngine.AnimationModule.dll')">
+      <HintPath>$(LibRefPath)\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule" Condition="Exists('$(LibRefPath)\UnityEngine.PhysicsModule.dll')">
+      <HintPath>$(LibRefPath)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule" Condition="Exists('$(LibRefPath)\UnityEngine.AssetBundleModule.dll')">
+      <HintPath>$(LibRefPath)\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx">
+      <HintPath>$(LibRefPath)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony" Condition="Exists('$(LibRefPath)\0Harmony.dll')">
+      <HintPath>$(LibRefPath)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="R2API" Condition="Exists('$(LibRefPath)\R2API.dll')">
+      <HintPath>$(LibRefPath)\R2API.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
-  <!--
-    КРИТИЧНО для режима A: UnityEngine.CoreModule.dll (и прочие *Module) должны быть
-    в lib\ ОБЯЗАТЕЛЬНО. В Mono-сборках RoR2 типы Component/MonoBehaviour/GameObject
-    объявлены именно в CoreModule, а legacy UnityEngine.dll содержит только type-forwards.
-    Если CoreModule отсутствует, компилятор берёт базовые классы из mscorlib-подобных
-    заглушек и считает все типы Assembly-CSharp (BuffDef, HealthComponent, NetworkServer...)
-    «не найденными в RoR2», хотя Assembly-CSharp.dll подключена.
-  -->
-  <Target Name="RequireCoreModuleInLib" BeforeTargets="ResolveAssemblyReferences"
-          Condition="'$(HasLibMode)' == 'true' And !Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
-    <Error Text="[RoR2FirstPersonBrawler] В lib\ есть DLL, но ОТСУТСТВУЕТ UnityEngine.CoreModule.dll. Без неё ошибки «тип BuffDef/HealthComponent не найден в RoR2» неизбежны: базовые классы Component/MonoBehaviour живут именно в этой сборке. Скопируйте UnityEngine.CoreModule.dll из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ в lib\ и пересоберите." />
+  <!-- Режим A: обязательные DLL должны физически присутствовать в lib\.
+       Отсутствие любого из них = массовые CS0246, поэтому останавливаем сборку
+       с конкретным списком недостающих файлов ДО компиляции. -->
+  <Target Name="RequireLibFiles" BeforeTargets="ValidateLibReferences;ResolveAssemblyReferences"
+          Condition="'$(HasLibMode)' == 'true'">
+    <ItemGroup>
+      <_RequiredLib Include="Assembly-CSharp.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;BepInEx.dll" />
+      <_MissingLib Include="@(_RequiredLib)" Exclude="$(LibRefPath)\@(_RequiredLib)" Condition="!Exists('$(LibRefPath)\%(_RequiredLib.Identity)')" />
+    </ItemGroup>
+    <Error Condition="'@(_MissingLib)' != ''"
+           Text="[RoR2FirstPersonBrawler] В lib\ отсутствуют обязательные сборки: @(_MissingLib, ', '). Скопируйте их из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ (Assembly-CSharp, UnityEngine, UnityEngine.CoreModule) и &lt;игра&gt;\BepInEx\core\ (BepInEx). Без UnityEngine.CoreModule.dll ошибки «BuffDef/HealthComponent не найдены в RoR2» неизбежны." />
   </Target>
 
   <!-- Режим B: те же сборки по путям игры — добавляются только если их НЕТ в lib\,

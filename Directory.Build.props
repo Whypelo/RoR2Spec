@@ -1,0 +1,19 @@
+<Project>
+  <!--
+    Единая настройка компилятора для всех проектов решения.
+
+    КРИТИЧНО для net35-проектов (плагины Risk of Rain 2): VS2026/dotnet SDK по
+    умолчанию собирает через Roslyn из состава dotnet SDK, который не поддерживает
+    целевой фреймворк .NET Framework 3.5 — ссылки на Assembly-CSharp.dll / R2API.dll
+    (косвенно зависящие от netstandard) не разрешаются (MSB3268), и вся сборка
+    превращается в поток ошибок CS0246 даже при корректных DLL в lib\.
+
+    Отключаем Roslyn-компилятор SDK: используется нативный csc.exe из .NET Framework
+    (ставится вместе с Windows/VS и полностью поддерживает net35).
+  -->
+  <PropertyGroup>
+    <UsingMicrosoftNETSdkRoslynCompilers>false</UsingMicrosoftNETSdkRoslynCompilers>
+    <CscToolPath Condition="'$(OS)' == 'Windows_NT' And Exists('$(WINDIR)\Microsoft.NET\Framework\v4.0.30319\csc.exe')">$(WINDIR)\Microsoft.NET\Framework\v4.0.30319</CscToolPath>
+    <CscToolExe Condition="'$(CscToolPath)' != ''">csc.exe</CscToolExe>
+  </PropertyGroup>
+</Project>
