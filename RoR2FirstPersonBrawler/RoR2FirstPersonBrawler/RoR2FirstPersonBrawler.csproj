@@ -75,7 +75,7 @@
     вместо десятков безликих CS0246 («Не удалось найти тип ... RoR2/UnityEngine/BepInEx»).
     Причина именно в отсутствии путей к игре, а не в коде мода.
   -->
-  <Target Name="DiagnoseGameReferences" DependsOnTargets="AutoDetectRoR2Path" BeforeTargets="BeforeBuild;CoreCompile">
+  <Target Name="DiagnoseGameReferences" BeforeTargets="BeforeBuild;CoreCompile">
     <ItemGroup>
       <!-- Проверка выполняется ВНУТРИ target: на уровне глобального ItemGroup
        %(Identity) недоступен в Condition, что вызывало ошибку MSBuild
@@ -116,59 +116,27 @@
   </PropertyGroup>
 
   <!--
-    Путь к установленной игре задаётся одним из способов (в порядке приоритета):
+    Путь к установленной игре задаётся ЯВНО, автоматическое определение пути
+    СОЗНАТЕЛЬНО ОТКЛЮЧЕНО (пользовательская просьба: игра находится в
+    F:\Steam\steamapps\common\Risk of Rain 2, автодетект по реестру Steam его
+    не применял к ссылкам). Способы задания (в порядке приоритета):
       1. RoR2FirstPersonBrawler.csproj.user  ->  <RoR2Path>...</RoR2Path>  (не в git)
       2. Переменная окружения RoR2_PATH
-      3. Значение по умолчанию: стандартная Steam-директория
+    Если путь не задан ни одним способом — используется значение по умолчанию
+    (стандартная директория Steam). Свойства вычисляются ОДИН РАЗ при загрузке
+    проекта (глобальный PropertyGroup): именно тогда MSBuild оценивает условия
+    HintPath у элементов <Reference>, поэтому никакой target больше не нужен.
   -->
   <PropertyGroup>
     <!-- Убираем возможные хвостовые обратные слеши (частая причина «путь не найден»,
          особенно при копировании из проводника: "D:\Steam\Risk of Rain 2\") -->
     <RoR2Path Condition="'$(RoR2Path)' != ''">$(RoR2Path.TrimEnd('\'))</RoR2Path>
     <RoR2Path Condition="'$(RoR2Path)' == '' And '$(RoR2_PATH)' != ''">$(RoR2_PATH.TrimEnd('\'))</RoR2Path>
-    <!-- КРИТИЧНО: дефолтный путь ВСЕГДА вычисляется (даже если в итоге будет
-         переопределён автодетектом). Причина: условие на элементе <Reference>
-         вычисляется при ЗАГРУЗКЕ проекта, ДО выполнения любых target'ов; если бы
-         свойство было пустым на этапе загрузки, ссылки режима B вообще не
-         создавались бы — и никакое автоопределение в target их бы не вернуло
-         (именно так возникали массовые CS0246 «тип не найден в RoR2»). -->
-    <RoR2Path Condition="('$(RoR2Path)' == '' Or !Exists('$(RoR2Path)')) And ('$(OS)' == 'Windows_NT')">C:\Program Files (x86)\Steam\steamapps\common\Risk of Rain 2</RoR2Path>
+    <RoR2Path Condition="'$(RoR2Path)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Risk of Rain 2</RoR2Path>
     <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
     <BepInExCorePath>$(RoR2Path)\BepInEx\core</BepInExCorePath>
     <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
   </PropertyGroup>
-
-  <!--
-    Автоопределение пути к игре через реестр Steam (HKLM\SOFTWARE\WOW6432Node\Valve\Steam -> InstallPath)
-    и библиотеки Steam (libraryfolders.vdf), если явный путь не задан или невалиден.
-    Выполняется только на Windows и только когда Assembly-CSharp.dll по текущему пути не найден.
-  -->
-  <Target Name="AutoDetectRoR2Path" BeforeTargets="PurgeBrokenLibRefs;RequireCoreModuleInLib;ValidateLibReferences;RequireLibFiles;DiagnoseGameReferences;RecomputeGamePaths;ResolveAssemblyReferences"
-          Condition="'$(OS)' == 'Windows_NT' And !Exists('$(RoR2ManagedPath)\Assembly-CSharp.dll')">
-    <!-- КРИТИЧНО: все вычисления — внутри Exec/powershell, а НЕ в MSBuild-условиях.
-         Причина: условие на элементе <Reference> вычисляется при ЗАГРУЗКЕ проекта,
-         ДО выполнения любых target'ов. Предыдущая версия записывала RoR2Path из
-         MSBuild-условия с Exists(...) — это условие проверялось для СТАРОГО
-         (дефолтного C:\) пути, оставалось ложным, и автоскан реестра/библиотек
-         Steam фактически никогда не применялся: в логе было видно определённый
-         InstallPath F:\Steam, но ссылки всё равно шли на C:\Program Files (x86).
-         Теперь PowerShell сам перебирает библиотеки Steam и печатает найденный
-         путь одной строкой stdout, которая безусловно присваивается свойству. -->
-    <Exec Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\FindRoR2Path.ps1&quot;"
-          IgnoreExitCode="true" ContinueOnError="true">
-      <Output TaskParameter="ConsoleOutput" PropertyName="_DetectedRoR2Path" />
-    </Exec>
-    <PropertyGroup>
-      <RoR2Path Condition="'$(_DetectedRoR2Path)' != ''">$(_DetectedRoR2Path)</RoR2Path>
-      <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
-      <BepInExCorePath>$(RoR2Path)\BepInEx\core</BepInExCorePath>
-      <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
-    </PropertyGroup>
-    <Message Importance="high" Condition="'$(_DetectedRoR2Path)' != '' And Exists('$(RoR2ManagedPath)\Assembly-CSharp.dll')"
-             Text="[RoR2FirstPersonBrawler] Путь к игре определён автоматически: $(RoR2Path)" />
-    <Message Importance="high" Condition="'$(_DetectedRoR2Path)' == ''"
-             Text="[RoR2FirstPersonBrawler] ВНИМАНИЕ: игра не найдена ни по умолчанию ($(RoR2Path)), ни в реестре/библиотеках Steam. Задайте путь явно: переменная окружения RoR2_PATH или файл csproj.user (&lt;RoR2Path&gt;...&lt;/RoR2Path&gt;) — см. README." />
-  </Target>
 
   <!--
     Ссылки на DLL игры. ДВА режима:
@@ -220,7 +188,7 @@
     битых файлов те же сборки автоматически подхватываются по путям игры
     (режим B) — отдельное снятие ссылок не требуется.
   -->
-  <Target Name="PurgeBrokenLibRefs" DependsOnTargets="AutoDetectRoR2Path;RecomputeGamePaths"
+  <Target Name="PurgeBrokenLibRefs"
           BeforeTargets="RequireCoreModuleInLib;ValidateLibReferences;RequireLibFiles;DiagnoseGameReferences;ResolveAssemblyReferences"
           Condition="Exists('$(LibRefPath)')">
     <!-- Имя файла записывается в stdout ТОЛЬКО если он реально удалён (проверка
@@ -237,77 +205,13 @@
 
 
   <!--
-    КРИТИЧНО: после автоопределения пути к игре (AutoDetectRoR2Path) пересчитать
-    производные пути RoR2ManagedPath/BepInExCorePath/BepInExPluginPath — иначе
-    ссылки режима B будут указывать на несуществующий путь по умолчанию
-    (C:\Program Files (x86)\Steam\...), даже когда игра реально установлена в
-    другой библиотеке Steam (например, F:\Steam). Именно это вызывало массовые
-    CS0246 «тип не найден в RoR2» при корректно определённом InstallPath.
-    Важно: выполняется как Target (после AutoDetectRoR2Path), а не как глобальный
-    PropertyGroup — иначе MSBuild подставил бы сюда СТАРЫЙ (дефолтный) RoR2Path,
-    перечёркивая результат автоопределения.
+    Примечание: ранее здесь существовал target RecomputeGamePaths, пересоздававший
+    ссылки режима B после автоопределения пути к игре. Автоопределение пути
+    СОЗНАТЕЛЬНО ОТКЛЮЧЕНО (по просьбе пользователя): путь задаётся только явно
+    через csproj.user / переменную окружения RoR2_PATH и вычисляется один раз при
+    загрузке проекта — поэтому ссылки из глобального ItemGroup (режим B, см. ниже)
+    сразу получают корректный HintPath, и пересчёт больше не нужен.
   -->
-  <Target Name="RecomputeGamePaths" AfterTargets="AutoDetectRoR2Path" BeforeTargets="ResolveAssemblyReferences">
-    <PropertyGroup>
-      <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
-      <BepInExCorePath>$(RoR2Path)\BepInEx\core</BepInExCorePath>
-      <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
-      <_DefaultSteamPathPrefix>C:\Program Files (x86)\Steam</_DefaultSteamPathPrefix>
-      <_IsDefaultSteamPath Condition="$(RoR2ManagedPath.StartsWith($(_DefaultSteamPathPrefix)))">true</_IsDefaultSteamPath>
-      <_IsDefaultSteamPath Condition="'$(_IsDefaultSteamPath)' != 'true'">false</_IsDefaultSteamPath>
-    </PropertyGroup>
-    <!-- КРИТИЧНО: обновляем HintPath у ссылок режима B ЯВНО (item update), потому что
-         условие/HintPath элемента <Reference> вычислялись при загрузке проекта — со
-         СТАРЫМ (дефолтным C:\) значением RoR2Path. Без этого шага автоопределение пути
-         к игре не применялось к уже созданным ссылкам: в логе был определён InstallPath
-         F:\Steam, а Assembly-CSharp.dll искался в C:\Program Files (x86)... -->
-    <ItemGroup>
-      <!-- КРИТИЧНО: ссылки режима B пересоздаются ЗАНОВО (Include, а не update).
-           Изначальные элементы создавались при загрузке проекта с дефолтным
-           C:\Program Files (x86)\Steam — автоопределение пути к игре их бы не
-           затронуло. Здесь Include-условие вычисляется уже ПОСЛЕ AutoDetectRoR2Path,
-           поэтому берётся реальный путь; Remove-список снимает «дефолтные» дубликаты
-           (иначе был бы MSB3105 о повторных ссылках). -->
-      <Reference Remove="Assembly-CSharp;UnityEngine;UnityEngine.CoreModule;UnityEngine.AnimationModule;UnityEngine.PhysicsModule;UnityEngine.AssetBundleModule;BepInEx;0Harmony;R2API" />
-      <Reference Include="BepInEx" Condition="!Exists('$(LibRefPath)\BepInEx.dll')">
-        <HintPath>$(BepInExCorePath)\BepInEx.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-      <Reference Include="UnityEngine" Condition="!Exists('$(LibRefPath)\UnityEngine.dll')">
-        <HintPath>$(RoR2ManagedPath)\UnityEngine.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-      <Reference Include="0Harmony" Condition="!Exists('$(LibRefPath)\0Harmony.dll')">
-        <HintPath>$(BepInExCorePath)\0Harmony.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-      <Reference Include="R2API" Condition="!Exists('$(LibRefPath)\R2API.dll')">
-        <HintPath>$(BepInExPluginPath)\R2API.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-      <Reference Include="Assembly-CSharp" Condition="!Exists('$(LibRefPath)\Assembly-CSharp.dll')">
-        <HintPath>$(RoR2ManagedPath)\Assembly-CSharp.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-      <Reference Include="UnityEngine.CoreModule" Condition="!Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
-        <HintPath>$(RoR2ManagedPath)\UnityEngine.CoreModule.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-      <Reference Include="UnityEngine.AnimationModule" Condition="!Exists('$(LibRefPath)\UnityEngine.AnimationModule.dll')">
-        <HintPath>$(RoR2ManagedPath)\UnityEngine.AnimationModule.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-      <Reference Include="UnityEngine.PhysicsModule" Condition="!Exists('$(LibRefPath)\UnityEngine.PhysicsModule.dll')">
-        <HintPath>$(RoR2ManagedPath)\UnityEngine.PhysicsModule.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-      <Reference Include="UnityEngine.AssetBundleModule" Condition="!Exists('$(LibRefPath)\UnityEngine.AssetBundleModule.dll')">
-        <HintPath>$(RoR2ManagedPath)\UnityEngine.AssetBundleModule.dll</HintPath>
-        <Private>false</Private>
-      </Reference>
-    </ItemGroup>
-    <Message Importance="high" Text="[RoR2FirstPersonBrawler] Managed-путь для ссылок: $(RoR2ManagedPath)" />
-  </Target>
 
   <!--
     КРИТИЧНО для режима A: UnityEngine.CoreModule.dll (и прочие *Module) должны быть
@@ -318,7 +222,7 @@
     «не найденными в RoR2», хотя Assembly-CSharp.dll подключена.
     Проверка выполняется ДО удаления подозрительных файлов (см. ValidateLibReferences).
   -->
-  <Target Name="RequireCoreModuleInLib" DependsOnTargets="AutoDetectRoR2Path" BeforeTargets="ValidateLibReferences;ResolveAssemblyReferences"
+  <Target Name="RequireCoreModuleInLib" BeforeTargets="ValidateLibReferences;ResolveAssemblyReferences"
           Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll') And !Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
     <Error Text="[RoR2FirstPersonBrawler] В lib\ есть DLL, но ОТСУТСТВУЕТ UnityEngine.CoreModule.dll. Без неё ошибки «тип BuffDef/HealthComponent не найден в RoR2» неизбежны: базовые классы Component/MonoBehaviour живут именно в этой сборке. Скопируйте UnityEngine.CoreModule.dll из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ в lib\ и пересоберите." />
   </Target>
@@ -331,7 +235,7 @@
     Target вызывается только если в lib\ есть хотя бы одна реальная DLL
     (HasLibMode == true); пустая папка lib\ (с .gitkeep) игнорируется.
   -->
-  <Target Name="ValidateLibReferences" DependsOnTargets="AutoDetectRoR2Path" BeforeTargets="ResolveAssemblyReferences"
+  <Target Name="ValidateLibReferences" BeforeTargets="ResolveAssemblyReferences"
           Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll')">
     <PropertyGroup>
       <!-- Порог в байтах: заглушки — единицы КБ; настоящие DLL — сотни КБ…МБ -->
@@ -404,7 +308,7 @@
   <!-- Режим A: обязательные DLL должны физически присутствовать в lib\.
        Отсутствие любого из них = массовые CS0246, поэтому останавливаем сборку
        с конкретным списком недостающих файлов ДО компиляции. -->
-  <Target Name="RequireLibFiles" DependsOnTargets="AutoDetectRoR2Path" BeforeTargets="ValidateLibReferences;ResolveAssemblyReferences"
+  <Target Name="RequireLibFiles" BeforeTargets="ValidateLibReferences;ResolveAssemblyReferences"
           Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll')">
     <ItemGroup>
       <_RequiredLib Include="Assembly-CSharp.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;BepInEx.dll" />
