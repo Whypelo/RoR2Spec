@@ -191,3 +191,26 @@ csc.exe из .NET Framework v4.0 — MSBuild передаёт ему совре�
 подавлено (`NoWarn MSB3268` + обход apt-фильтрации в `Directory.Build.props`).
 Если после `git pull` предупреждения остались — значит не обновлённый csproj: проверьте
 коммит через `git log -1`.
+
+### Steam установлен на другом диске (например, F:\Steam): путь к игре определялся, но ссылки шли на C:\Program Files (x86)
+
+Симптом: в логе сборки виден `InstallPath REG_SZ F:\Steam`, но следом —
+`Managed-путь для ссылок: C:\Program Files (x86)\Steam\...` и массовые CS0246.
+
+Причина (исправлена): элементы `<Reference>` с путями игры создаются при **загрузке**
+проекта — до выполнения любых target'ов автоопределения. Автоопределение меняло только
+свойство пути, но не уже созданные ссылки. Теперь target `RecomputeGamePaths` после
+автоопределения пересоздаёт все ссылки режима B заново (Remove + Include) с реальным
+путём; поиск игры вынесен в скрипт `FindRoR2Path.ps1` (реестр HKLM/HKCU + все
+библиотеки Steam из `libraryfolders.vdf`).
+
+Что сделать: `git pull` → закрыть VS → удалить `bin\`, `obj\`, `.vs\` → открыть sln → Rebuild.
+В логе должна появиться строка `[RoR2FirstPersonBrawler] Путь к игре определён автоматически: F:\Steam\steamapps\common\Risk of Rain 2`.
+Если игра не найдена автоматически — задайте путь явно в `RoR2FirstPersonBrawler.csproj.user`:
+```xml
+<Project>
+  <PropertyGroup>
+    <RoR2Path>F:\Steam\steamapps\common\Risk of Rain 2</RoR2Path>
+  </PropertyGroup>
+</Project>
+```
