@@ -137,7 +137,7 @@
     и библиотеки Steam (libraryfolders.vdf), если явный путь не задан или невалиден.
     Выполняется только на Windows и только когда Assembly-CSharp.dll по текущему пути не найден.
   -->
-  <Target Name="AutoDetectRoR2Path" BeforeTargets="DiagnoseGameReferences;ResolveAssemblyReferences"
+  <Target Name="AutoDetectRoR2Path" BeforeTargets="PurgeBrokenLibRefs;RequireCoreModuleInLib;ValidateLibReferences;RequireLibFiles;DiagnoseGameReferences;RecomputeGamePaths;ResolveAssemblyReferences"
           Condition="'$(OS)' == 'Windows_NT' And !Exists('$(RoR2ManagedPath)\Assembly-CSharp.dll')">
     <!-- reg query возвращает строку вида: "...    InstallPath    REG_SZ    C:\Program Files (x86)\Steam" -->
     <Exec Command='reg query "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam" /v InstallPath'
@@ -185,10 +185,62 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <!-- Режим A активен только если в lib\ есть хотя бы одна реальная DLL
-         (папка может существовать с пустым .gitkeep — это НЕ режим A) -->
-    <HasLibMode Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll') Or Exists('$(LibRefPath)\BepInEx.dll') Or Exists('$(LibRefPath)\UnityEngine.dll')">true</HasLibMode>
+    <!-- ВАЖНО: ссылки на DLL игры выбираются по ФАКТУ ПРЕДСТАВЛЕНИЯ каждого файла
+         (Exists(...) на уровне элемента <Reference>), а НЕ по флагу режима.
+         Это принципиально: ранее режим A включался наличием ЛЮБОГО файла в lib\,
+         и «битые» урезанные DLL из zip-архива GitHub (Assembly-CSharp.dll ~134 КБ
+         вместо нескольких МБ, UnityEngine.dll ~109 КБ, BepInEx.dll ~132 КБ)
+         перехватывали все ссылки — отсюда массовые CS0246 («тип BuffDef/HealthComponent
+         не найден в RoR2», «NetworkServer не существует») даже при корректно
+         определённом пути к игре. Такие файлы теперь автоматически удаляются
+         target'ом PurgeBrokenLibRefs (порог 500 КБ), а ссылки по путям игры
+         подхватываются теми же Exists-условиями сразу после удаления. -->
+    <HasLibMode Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll')">true</HasLibMode>
   </PropertyGroup>
+
+  <!--
+    Очистка заведомо битых сборок в lib\: файлы меньше порога (заглушки из
+    прошлых версий проекта или урезанные DLL из zip-архива репозитория).
+    Выполняется ДО RequireCoreModuleInLib/ValidateLibReferences/ResolveAssemblyReferences.
+    Ссылки выбираются по Exists() на уровне элемента, поэтому после удаления
+    битых файлов те же сборки автоматически подхватываются по путям игры
+    (режим B) — отдельное снятие ссылок не требуется.
+  -->
+  <Target Name="PurgeBrokenLibRefs" DependsOnTargets="RecomputeGamePaths"
+          BeforeTargets="RequireCoreModuleInLib;ValidateLibReferences;RequireLibFiles;DiagnoseGameReferences;ResolveAssemblyReferences"
+          Condition="Exists('$(LibRefPath)')">
+    <!-- Имя файла записывается в stdout ТОЛЬКО если он реально удалён (проверка
+         Test-Path после Remove-Item). Это важно: при инкрементальной сборке target
+         выполняется повторно, файлы уже настоящие — и ложный список "PURGED" не
+         формируется. -->
+    <Exec Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command &quot;$t=[int64]500000; Get-ChildItem -LiteralPath '$(LibRefPath)' -Filter *.dll | Where-Object { $_.Length -lt $t } | ForEach-Object { $f=$_.FullName; $n=$_.Name; $l=$_.Length; Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue; if(-not (Test-Path -LiteralPath $f)){ Write-Output ($n + '=' + $l) } }&quot;"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" ItemName="_PurgedLibLines" />
+    </Exec>
+    <Message Importance="high" Condition="'@(_PurgedLibLines)' != ''"
+             Text="[RoR2FirstPersonBrawler] ВНИМАНИЕ: из lib\ удалены слишком маленькие (ненастоящие) сборки: @(_PurgedLibLines, ', '). Это DLL-заглушки (например, из zip-архива GitHub вместо файлов из установленной игры). Скопируйте настоящие файлы: &lt;игра&gt;\Risk of Rain 2_Data\Managed\Assembly-CSharp.dll (несколько МБ!), UnityEngine.dll, UnityEngine.CoreModule.dll и &lt;игра&gt;\BepInEx\core\BepInEx.dll. После копирования пересоберите решение." />
+  </Target>
+
+
+  <!--
+    КРИТИЧНО: после автоопределения пути к игре (AutoDetectRoR2Path) пересчитать
+    производные пути RoR2ManagedPath/BepInExCorePath/BepInExPluginPath — иначе
+    ссылки режима B будут указывать на несуществующий путь по умолчанию
+    (C:\Program Files (x86)\Steam\...), даже когда игра реально установлена в
+    другой библиотеке Steam (например, F:\Steam). Именно это вызывало массовые
+    CS0246 «тип не найден в RoR2» при корректно определённом InstallPath.
+    Важно: выполняется как Target (после AutoDetectRoR2Path), а не как глобальный
+    PropertyGroup — иначе MSBuild подставил бы сюда СТАРЫЙ (дефолтный) RoR2Path,
+    перечёркивая результат автоопределения.
+  -->
+  <Target Name="RecomputeGamePaths" AfterTargets="AutoDetectRoR2Path" BeforeTargets="ResolveAssemblyReferences">
+    <PropertyGroup>
+      <RoR2ManagedPath>$(RoR2Path)\Risk of Rain 2_Data\Managed</RoR2ManagedPath>
+      <BepInExCorePath>$(RoR2Path)\BepInEx\core</BepInExCorePath>
+      <BepInExPluginPath>$(RoR2Path)\BepInEx\plugins</BepInExPluginPath>
+    </PropertyGroup>
+    <Message Importance="high" Text="[RoR2FirstPersonBrawler] Managed-путь для ссылок: $(RoR2ManagedPath)" />
+  </Target>
 
   <!--
     КРИТИЧНО для режима A: UnityEngine.CoreModule.dll (и прочие *Module) должны быть
@@ -200,7 +252,7 @@
     Проверка выполняется ДО удаления подозрительных файлов (см. ValidateLibReferences).
   -->
   <Target Name="RequireCoreModuleInLib" BeforeTargets="ValidateLibReferences;ResolveAssemblyReferences"
-          Condition="'$(HasLibMode)' == 'true' And !Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
+          Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll') And !Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
     <Error Text="[RoR2FirstPersonBrawler] В lib\ есть DLL, но ОТСУТСТВУЕТ UnityEngine.CoreModule.dll. Без неё ошибки «тип BuffDef/HealthComponent не найден в RoR2» неизбежны: базовые классы Component/MonoBehaviour живут именно в этой сборке. Скопируйте UnityEngine.CoreModule.dll из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ в lib\ и пересоберите." />
   </Target>
 
@@ -213,7 +265,7 @@
     (HasLibMode == true); пустая папка lib\ (с .gitkeep) игнорируется.
   -->
   <Target Name="ValidateLibReferences" BeforeTargets="ResolveAssemblyReferences"
-          Condition="'$(HasLibMode)' == 'true'">
+          Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll')">
     <PropertyGroup>
       <!-- Порог в байтах: заглушки — единицы КБ; настоящие DLL — сотни КБ…МБ -->
       <_FacadeSizeThresholdBytes>102400</_FacadeSizeThresholdBytes>
@@ -240,19 +292,19 @@
            Text="[RoR2FirstPersonBrawler] В lib\ обнаружены НЕ НАСТОЯЩИЕ (синтетические facade-) сборки: @(_FakeLibRefs->'%(DllName)', ', '). Они были сгенерированы предыдущей версией проекта и удалены при сборке. Ошибки вида «тип BuffDef/HealthComponent не найден в RoR2» вызваны именно ими. Скопируйте настоящие DLL из &lt;игра&gt;\Risk of Rain 2_Data\Managed\ и &lt;игра&gt;\BepInEx\core\ в lib\ и пересоберите решение." />
   </Target>
 
-  <ItemGroup Condition="'$(HasLibMode)' == 'true'">
+  <ItemGroup>
     <!-- Не глоб lib\*.dll: лишние/старые сборки (например, UnityEngine.Networking.dll
          из старых версий игры) вызывали конфликты. Список фиксированный; при сборке
          проверяется существование каждого файла, недостающие — понятная ошибка. -->
-    <Reference Include="Assembly-CSharp">
+    <Reference Include="Assembly-CSharp" Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll')">
       <HintPath>$(LibRefPath)\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine">
+    <Reference Include="UnityEngine" Condition="Exists('$(LibRefPath)\UnityEngine.dll')">
       <HintPath>$(LibRefPath)\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.CoreModule">
+    <Reference Include="UnityEngine.CoreModule" Condition="Exists('$(LibRefPath)\UnityEngine.CoreModule.dll')">
       <HintPath>$(LibRefPath)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
@@ -268,7 +320,7 @@
       <HintPath>$(LibRefPath)\UnityEngine.AssetBundleModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="BepInEx">
+    <Reference Include="BepInEx" Condition="Exists('$(LibRefPath)\BepInEx.dll')">
       <HintPath>$(LibRefPath)\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
@@ -286,7 +338,7 @@
        Отсутствие любого из них = массовые CS0246, поэтому останавливаем сборку
        с конкретным списком недостающих файлов ДО компиляции. -->
   <Target Name="RequireLibFiles" BeforeTargets="ValidateLibReferences;ResolveAssemblyReferences"
-          Condition="'$(HasLibMode)' == 'true'">
+          Condition="Exists('$(LibRefPath)\Assembly-CSharp.dll')">
     <ItemGroup>
       <_RequiredLib Include="Assembly-CSharp.dll;UnityEngine.dll;UnityEngine.CoreModule.dll;BepInEx.dll" />
       <_MissingLib Include="@(_RequiredLib)" Exclude="$(LibRefPath)\@(_RequiredLib)" Condition="!Exists('$(LibRefPath)\%(_RequiredLib.Identity)')" />
@@ -304,7 +356,7 @@
       <Private>false</Private>
     </Reference>
     <!-- Legacy UnityEngine.dll (режим B): см. пояснение выше -->
-    <Reference Include="UnityEngine" Condition="'$(HasLibMode)' != 'true' And !Exists('$(LibRefPath)\UnityEngine.dll')">
+    <Reference Include="UnityEngine" Condition="!Exists('$(LibRefPath)\UnityEngine.dll')">
       <HintPath>$(RoR2ManagedPath)\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
